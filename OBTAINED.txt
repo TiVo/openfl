@@ -1,0 +1,5 @@
+06/03/2016
+This is a development snapshot, and so has no tagged version.  This
+is a download of commit 69426783fa2ad029957457a283807cf7e00a46a0.
+This is actually the openfl "develop" branch; it used to be the
+"opengl-changes" branch, but that got merged in git into the "develop".

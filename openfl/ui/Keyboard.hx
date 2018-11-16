@@ -4,6 +4,11 @@ package openfl.ui;
 import lime.ui.KeyCode;
 
 
+/**
+ * TiVo - work around the fact that lime defines a KeyCode class that we also
+ * define as an MDO
+ **/
+@:notivomdofixup
 @:final class Keyboard {
 	
 	
@@ -108,6 +113,21 @@ import lime.ui.KeyCode;
 	public static inline var BACKSLASH = 220;
 	public static inline var RIGHTBRACKET = 221;
 	public static inline var QUOTE = 222;
+
+#if tivo_android
+    // Same as TiVoKeyCodes.SELECT
+    public static inline var FIRETV_DPAD_CENTER = 0xf00c;
+    // Same as TiVoKeyCodes.PLAY
+    public static inline var FIRETV_MEDIA_PLAY_PAUSE = 0xf051;
+    // Same as TiVoKeyCodes.REVERSE
+    public static inline var FIRETV_MEDIA_REWIND = 0xf059;
+    // Same as TiVoKeyCodes.FORWARD
+    public static inline var FIRETV_MEDIA_FAST_FORWARD = 0xf05a;
+    // Same as TiVoKeyCodes.TIVO
+    public static inline var FIRETV_MENU = 0xf500;
+    // Same as TiVoKeyCodes.REPLAY
+    public static inline var FIRETV_BACK = 0xf05b;
+#end
 	
 	public static var capsLock (default, null):Bool;
 	public static var numLock (default, null):Bool;
@@ -210,7 +230,7 @@ import lime.ui.KeyCode;
 			case KeyCode.F12: Keyboard.F12;
 			case KeyCode.PRINT_SCREEN: 301;
 			case KeyCode.SCROLL_LOCK: 145;
-			case KeyCode.PAUSE: Keyboard.BREAK;
+            case KeyCode.PAUSE: Keyboard.BREAK;
 			case KeyCode.INSERT: Keyboard.INSERT;
 			case KeyCode.HOME: Keyboard.HOME;
 			case KeyCode.PAGE_UP: Keyboard.PAGE_UP;
@@ -243,8 +263,13 @@ import lime.ui.KeyCode;
 			case KeyCode.F13: Keyboard.F13;
 			case KeyCode.F14: Keyboard.F14;
 			case KeyCode.F15: Keyboard.F15;
+#if tivo_android
+            case KeyCode.F16: Keyboard.FIRETV_MEDIA_REWIND;
+            case KeyCode.F17: Keyboard.FIRETV_MEDIA_FAST_FORWARD;
+#else
 			//case KeyCode.F16: 0x4000006B;
 			//case KeyCode.F17: 0x4000006C;
+#end
 			//case KeyCode.F18: 0x4000006D;
 			//case KeyCode.F19: 0x4000006E;
 			//case KeyCode.F20: 0x4000006F;
@@ -254,8 +279,14 @@ import lime.ui.KeyCode;
 			//case KeyCode.F24: 0x40000073;
 			//case KeyCode.EXECUTE: 0x40000074;
 			//case KeyCode.HELP: 0x40000075;
+#if tivo_android
+            case KeyCode.MENU: Keyboard.FIRETV_MENU;
+            // FireTV key
+            case KeyCode.SELECT: Keyboard.FIRETV_DPAD_CENTER;
+#else
 			//case KeyCode.MENU: 0x40000076;
 			//case KeyCode.SELECT: 0x40000077;
+#end
 			//case KeyCode.STOP: 0x40000078;
 			//case KeyCode.AGAIN: 0x40000079;
 			//case KeyCode.UNDO: 0x4000007A;
@@ -338,7 +369,13 @@ import lime.ui.KeyCode;
 			//case KeyCode.AUDIO_NEXT: 0x40000102;
 			//case KeyCode.AUDIO_PREVIOUS: 0x40000103;
 			//case KeyCode.AUDIO_STOP: 0x40000104;
+#if tivo_android
+            // FireTV via SDL maps the play/pause button to "audio play",
+            // which we want as PLAY
+            case KeyCode.AUDIO_PLAY: Keyboard.FIRETV_MEDIA_PLAY_PAUSE;
+#else
 			//case KeyCode.AUDIO_PLAY: 0x40000105;
+#end
 			//case KeyCode.AUDIO_MUTE: 0x40000106;
 			//case KeyCode.MEDIA_SELECT: 0x40000107;
 			//case KeyCode.WWW: 0x40000108;
@@ -347,7 +384,11 @@ import lime.ui.KeyCode;
 			//case KeyCode.COMPUTER: 0x4000010B;
 			//case KeyCode.APP_CONTROL_SEARCH: 0x4000010C;
 			//case KeyCode.APP_CONTROL_HOME: 0x4000010D;
+#if tivo_android
+            case KeyCode.APP_CONTROL_BACK: Keyboard.FIRETV_BACK;
+#else
 			//case KeyCode.APP_CONTROL_BACK: 0x4000010E;
+#end
 			//case KeyCode.APP_CONTROL_FORWARD: 0x4000010F;
 			//case KeyCode.APP_CONTROL_STOP: 0x40000110;
 			//case KeyCode.APP_CONTROL_REFRESH: 0x40000111;

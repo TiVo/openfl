@@ -10,7 +10,9 @@ import openfl.net.Socket;
 
 
 class XMLSocket extends EventDispatcher {
-	
+
+    // TiVo hack
+    public var sendRaw : Bool;
 	
 	public var connected (default, null):Bool;
 	public var timeout:Int;
@@ -96,7 +98,10 @@ class XMLSocket extends EventDispatcher {
 		__socket.send (object);
 		#else
 		__socket.writeUTFBytes (object);
-		__socket.writeByte (0);
+        // TiVo hack
+        if (!sendRaw) {
+            __socket.writeByte (0);
+        }
 		#end
 		
 	}

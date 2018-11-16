@@ -6,15 +6,6 @@
 	
 	<window stencil-buffer="true" />
 	
-	<unset name="custom-backend" />
-	
-	<section if="${target}-backend" unless="no-custom-backend">
-		
-		<set name="target-backend" value="${target}-backend" />
-		<set name="custom-backend" value="$${target-backend}" />
-		
-	</section>
-	
 	<section unless="lime || custom-backend">
 		
 		<haxelib name="lime" unless="create" />
@@ -30,7 +21,7 @@
 	
 	<include haxelib="${custom-backend}" if="display custom-backend" />
 	<haxelib name="${custom-backend}" if="custom-backend" unless="display" />
-	
+
 	<section unless="custom-backend">
 		
 		<section if="native">

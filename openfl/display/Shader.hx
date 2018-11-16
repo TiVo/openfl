@@ -177,7 +177,7 @@ class Shader {
 				precision " + (precisionHint == FULL ? "mediump" : "lowp") + " float;
 				#endif
 				" + glFragmentSource;
-			
+
 			glProgram = GLUtils.createProgram (glVertexSource, fragment);
 			
 			if (glProgram != null) {
