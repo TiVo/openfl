@@ -42,29 +42,63 @@ class Shader {
 				gl_Position = uMatrix * aPosition;
 				
 			}";
-		
+
+
+        // uMaskType 0 == no mask
+        // uMaskType 1 == mask
+        // uMaskType 2 == alpha mask
 		glFragmentSource = 
 			
-			"varying vec2 vTexCoord;
-			uniform sampler2D uImage0;
-			uniform float uAlpha;
-			
-			void main(void) {
-				
-				vec4 color = texture2D (uImage0, vTexCoord);
-				
-				if (color.a == 0.0) {
-					
-					gl_FragColor = vec4 (0.0, 0.0, 0.0, 0.0);
-					
-				} else {
-					
-					gl_FragColor = vec4 (color.rgb / color.a, color.a * uAlpha);
-					
-				}
-				
-			}";
-		
+            "varying vec2 vTexCoord;
+            uniform sampler2D uImage0;
+            uniform sampler2D uMask1;
+            uniform int uMaskType;
+            uniform vec2 uMaskScale;
+            uniform vec2 uMaskOffset;
+            uniform float uMaskOutside;
+            uniform float uAlpha;
+            
+            void main(void) {
+                
+                vec4 color = texture2D (uImage0, vTexCoord);
+
+                if (color.a == 0.0) {
+                    
+                    gl_FragColor = vec4 (0.0, 0.0, 0.0, 0.0);
+                    
+                } else if (uMaskType == 0) {
+                    
+                    gl_FragColor = color * uAlpha;
+                    
+                } else {
+
+                    vec2 mask_xy = (vTexCoord * uMaskScale) + uMaskOffset;
+
+                    if ((mask_xy.x < 0.0) || (mask_xy.x > 1.0) ||
+                        (mask_xy.y < 0.0) || (mask_xy.y > 1.0)) {
+
+                        gl_FragColor = color * uMaskOutside * uAlpha;
+
+                    } else {
+
+                        vec4 mask_color = texture2D (uMask1, mask_xy);
+    
+                        if (uMaskType == 1) {
+    
+                            gl_FragColor = color * sign(length(mask_color)) * uAlpha;
+    
+                        } else {
+    
+                            gl_FragColor = color * mask_color.a * uAlpha;
+        
+                        }
+    
+                    } 
+
+                }
+                
+            }";
+        
 		__init ();
 		
 	}

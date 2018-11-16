@@ -158,7 +158,13 @@ class TextField extends InteractiveObject {
 	
 	public function getCharIndexAtPoint (x:Float, y:Float):Int {
 		
-		if (x <= 2 || x > width + 4 || y <= 0 || y > height + 4) return -1;
+		if (x <= TextEngine.HORIZONTAL_MARGIN || 
+            x > (width + 2 * TextEngine.HORIZONTAL_MARGIN) || 
+            y <= TextEngine.VERTICAL_MARGIN || 
+            y > (height + 2 * TextEngine.VERTICAL_MARGIN)) {
+            
+            return -1;
+        }
 		
 		__updateLayout ();
 		
@@ -235,7 +241,13 @@ class TextField extends InteractiveObject {
 		
 		__updateLayout ();
 		
-		if (x <= 2 || x > width + 4 || y <= 0 || y > height + 4) return -1;
+		if (x <= TextEngine.HORIZONTAL_MARGIN ||
+            x > (width + 2 * TextEngine.HORIZONTAL_MARGIN) ||
+            y <= TextEngine.VERTICAL_MARGIN ||
+            y > (height + 2 * TextEngine.VERTICAL_MARGIN)) {
+                
+            return -1;
+        }
 		
 		for (i in 0...scrollV - 1) {
 			
@@ -323,8 +335,8 @@ class TextField extends InteractiveObject {
 		
 		var margin = switch (__textFormat.align) {
 			
-			case LEFT, JUSTIFY, START: 2;
-			case RIGHT, END: (__textEngine.width - lineWidth) - 2;
+			case LEFT, JUSTIFY, START: TextEngine.HORIZONTAL_MARGIN;
+			case RIGHT, END: (__textEngine.width - lineWidth) - TextEngine.HORIZONTAL_MARGIN;
 			case CENTER: (__textEngine.width - lineWidth) / 2;
 			
 		}
@@ -461,44 +473,20 @@ class TextField extends InteractiveObject {
 	public function replaceText (beginIndex:Int, endIndex:Int, newText:String):Void {
 		
 		if (endIndex < beginIndex || beginIndex < 0 || endIndex > __textEngine.text.length || newText == null) return;
-		
-		__textEngine.text = __textEngine.text.substring (0, beginIndex) + newText + __textEngine.text.substring (endIndex);
-		
-		var offset = newText.length - (endIndex - beginIndex);
-		
-		var i = 0;
-		var range;
-		
-		while (i < __textEngine.textFormatRanges.length) {
-			
-			range = __textEngine.textFormatRanges[i];
-			
-			if (range.start <= beginIndex && range.end >= endIndex) {
-				
-				range.end += offset;
-				i++;
-				
-			} else if (range.start >= beginIndex && range.end <= endIndex) {
-				
-				__textEngine.textFormatRanges.splice (i, 1);
-				offset -= (range.end - range.start);
-				
-			} else if (range.start > beginIndex && range.start <= endIndex) {
-				
-				range.start += offset;
-				i++;
-				
-			} else {
-				
-				i++;
-				
-			}
-			
-		}
-		
-		__dirty = true;
-		__layoutDirty = true;
-		
+
+        var t = __textEngine.text.substring (0, beginIndex) + newText + __textEngine.text.substring (endIndex);
+
+        // Re-set the text, which rebuilds all of the format groups and stuff
+        // using the new format
+        if (__isHTML) {
+            __textEngine.text = null;
+            set_htmlText(t);
+        }
+        else {
+            __textEngine.text = null;
+            set_text(t);
+        }
+        
 	}
 	
 	
@@ -847,11 +835,11 @@ class TextField extends InteractiveObject {
 						
 						if (!__textEngine.wordWrap) {
 							
-							__textEngine.width = __textEngine.textWidth + 4;
+							__textEngine.width = __textEngine.textWidth + 2 * TextEngine.HORIZONTAL_MARGIN;
 							
 						}
 						
-						__textEngine.height = __textEngine.textHeight + 4;
+						__textEngine.height = __textEngine.textHeight + 2 * TextEngine.VERTICAL_MARGIN;
 					
 					default:
 						
@@ -1043,9 +1031,19 @@ class TextField extends InteractiveObject {
 	private function set_defaultTextFormat (value:TextFormat):TextFormat {
 		
 		__textFormat.__merge (value);
-		
-		__layoutDirty = true;
-		__dirty = true;
+
+        // Re-set the text, which rebuilds all of the format groups and stuff
+        // using the new format
+        if (__isHTML) {
+            var htmlText = __textEngine.text;
+            __textEngine.text = null;
+            set_htmlText(htmlText);
+        }
+        else {
+            var text = __textEngine.text;
+            __textEngine.text = null;
+            set_text(text);
+        }
 		
 		return value;
 		
@@ -1181,7 +1179,6 @@ class TextField extends InteractiveObject {
 			
 			value = new EReg ("<br>", "g").replace (value, "\n");
 			value = new EReg ("<br/>", "g").replace (value, "\n");
-			value = decodeHTMLEntities (value);
 			
 			// crude solution
 			
@@ -1189,7 +1186,8 @@ class TextField extends InteractiveObject {
 			
 			if (segments.length == 1) {
 				
-				value = new EReg ("<.*?>", "g").replace (value, "");
+				value = decodeHTMLEntities
+                    (new EReg ("<.*?>", "g").replace (value, ""));
 				
 				if (__textEngine.textFormatRanges.length > 1) {
 					
@@ -1218,7 +1216,7 @@ class TextField extends InteractiveObject {
 					
 					if (segment == "") continue;
 					
-					var isClosingTag = segment.substr (0, 1) == "/";
+					var isClosingTag = (formatStack.length > 1) && (segment.substr (0, 1) == "/");
 					var tagEndIndex = segment.indexOf (">");
 					var start = tagEndIndex + 1;
 					var spaceIndex = segment.indexOf (" ");
@@ -1239,7 +1237,7 @@ class TextField extends InteractiveObject {
 						
 						if (start < segment.length) {
 							
-							sub = segment.substr (start);
+							sub = decodeHTMLEntities(segment.substr (start));
 							__textEngine.textFormatRanges.push (new TextFormatRange (format, value.length, value.length + sub.length));
 							value += sub;
 							noLineBreak = false;
@@ -1283,8 +1281,8 @@ class TextField extends InteractiveObject {
 									var colorEreg = ~/color="#([^"]+)/i;
 									
 									if (colorEreg.match (segment)) {
-										
-										format.color = Std.parseInt ("0x" + colorEreg.matched (1));
+
+										format.font_color = Std.parseInt ("0x" + colorEreg.matched (1));
 										
 									}
 									
@@ -1314,7 +1312,7 @@ class TextField extends InteractiveObject {
 							
 							if (start < segment.length) {
 								
-								sub = segment.substring (start);
+								sub = decodeHTMLEntities(segment.substring (start));
 								__textEngine.textFormatRanges.push (new TextFormatRange (format, value.length, value.length + sub.length));
 								value += sub;
 								noLineBreak = false;
@@ -1322,9 +1320,11 @@ class TextField extends InteractiveObject {
 							}
 							
 						} else {
-							
-							__textEngine.textFormatRanges.push (new TextFormatRange (format, value.length, value.length + segment.length));
-							value += segment;
+
+                            sub = decodeHTMLEntities(segment);
+
+							__textEngine.textFormatRanges.push (new TextFormatRange (format, value.length, value.length + sub.length));
+							value += sub;
 							noLineBreak = false;
 							
 						}

@@ -35,40 +35,53 @@ class GLBlendModeManager extends AbstractBlendModeManager {
 			
 			case ADD:
 				
+				gl.enable (gl.BLEND);
 				gl.blendEquation (gl.FUNC_ADD);
 				gl.blendFunc (gl.ONE, gl.ONE);
 			
+			// TIVO: Custom behavior for BlendMode.ERASE to support clobbering
+			// destination alpha, for example, for a video window
+			case ERASE:
+				
+				gl.disable (gl.BLEND);
+			
 			case MULTIPLY:
 				
+				gl.enable (gl.BLEND);
 				gl.blendEquation (gl.FUNC_ADD);
 				gl.blendFunc (gl.DST_COLOR, gl.ONE_MINUS_SRC_ALPHA);
 			
 			case SCREEN:
 				
+				gl.enable (gl.BLEND);
 				gl.blendEquation (gl.FUNC_ADD);
 				gl.blendFunc (gl.ONE, gl.ONE_MINUS_SRC_COLOR);
 			
 			case SUBTRACT:
 				
+				gl.enable (gl.BLEND);
 				gl.blendEquation (gl.FUNC_REVERSE_SUBTRACT);
 				gl.blendFunc (gl.ONE, gl.ONE);
 			
 			#if desktop
 			case DARKEN:
 				
+				gl.enable (gl.BLEND);
 				gl.blendEquation (0x8007); // GL_MIN
 				gl.blendFunc (gl.ONE, gl.ONE);
 				
 			case LIGHTEN:
 				
+				gl.enable (gl.BLEND);
 				gl.blendEquation (0x8008); // GL_MAX
 				gl.blendFunc (gl.ONE, gl.ONE);
 			#end
 			
 			default:
 				
+				gl.enable (gl.BLEND);
 				gl.blendEquation (gl.FUNC_ADD);
-				gl.blendFunc (gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+				gl.blendFunc (gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 			
 		}
 		

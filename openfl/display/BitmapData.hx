@@ -77,10 +77,30 @@ class BitmapData implements IBitmapDrawable {
 	private var __surface:CairoSurface;
 	private var __texture:GLTexture;
 	private var __textureVersion:Int;
-	
+
+    // Minimize the amount of OpenGL resources that are in use at any time by
+    // this class by:
+    // - Keeping a global list of BitmapData objects, to which a BitmapData
+    //   object is added when it is rendered if it is not already on the list
+    // - Updating a 'mark' value for each BitmapData as it is rendered
+    // - After a render is complete, looking at the list, and cleaning up
+    //   the OpenGL resources of any BitmapData with an old 'mark' indicating
+    //   that although it was rendered in a previous frame (which is why it
+    //   is on the list), it was not rendered in *this* frame, and thus its
+    //   graphics resources should be freed
+    // This requires support from the OpenGL render engine: it must call
+    // the static renderComplete() function after every render.
+    // NOTE: this is implemented using this linked list approach to minimize
+    // object churn (using Map or Array or whatever ends up doing tons of
+    // allocations every frame).
+    private static var gRendered : BitmapData;
+    private static var gRenderMark : Int;
+    private var mRenderMark : Int;
+    private var mOnRenderedList : Bool;
+    private var mRenderedNext : BitmapData;
 	
 	public function new (width:Int, height:Int, transparent:Bool = true, fillColor:UInt = 0xFFFFFFFF) {
-		
+
 		this.transparent = transparent;
 		
 		#if (neko || (js && html5))
@@ -352,7 +372,7 @@ class BitmapData implements IBitmapDrawable {
 		rect = null;
 		__isValid = false;
 		
-		if (__texture != null) {
+		if ((__texture != null) || (__buffer != null)) {
 			
 			var renderer = @:privateAccess Lib.current.stage.__renderer;
 			
@@ -362,10 +382,16 @@ class BitmapData implements IBitmapDrawable {
 				var gl = renderSession.gl;
 				
 				if (gl != null) {
-					
-					gl.deleteTexture (__texture);
-					__texture = null;
-					
+
+                    if (__texture != null) {
+                        gl.deleteTexture (__texture);
+                        __texture = null;
+                    }
+                    if (__buffer != null) {
+                        gl.deleteBuffer (__buffer);
+                        __buffer = null;
+                    }
+                    
 				}
 				
 			}
@@ -373,7 +399,25 @@ class BitmapData implements IBitmapDrawable {
 		}
 		
 	}
-	
+    
+
+    public function cleanup (renderSession : RenderSession) : Void
+    {
+        if (renderSession.gl == null) {
+            return;
+        }
+        
+        if (__texture != null) {
+            renderSession.gl.deleteTexture(__texture);
+            __texture = null;
+        }
+        
+        if (__buffer != null) {
+            renderSession.gl.deleteBuffer(__buffer);
+            __buffer = null;
+        }
+    }
+    
 	
 	public function draw (source:IBitmapDrawable, matrix:Matrix = null, colorTransform:ColorTransform = null, blendMode:BlendMode = null, clipRect:Rectangle = null, smoothing:Bool = false):Void {
 		
@@ -565,6 +609,12 @@ class BitmapData implements IBitmapDrawable {
 		
 	}
 	
+	public static function fromPixels (bytes:ByteArray, rawAlpha:ByteArray = null, onload:BitmapData -> Void = null, width: Int, height: Int):BitmapData {
+		
+		var bitmapData = new BitmapData (0, 0, true);
+		bitmapData.__fromPixels (bytes, rawAlpha, onload, width, height);
+		return bitmapData;
+	}
 	
 	#if (js && html5)
 	public static function fromCanvas (canvas:CanvasElement, transparent:Bool = true):BitmapData {
@@ -688,7 +738,45 @@ class BitmapData implements IBitmapDrawable {
 		return __surface;
 		
 	}
-	
+
+    public function rendered()
+    {
+        if (!mOnRenderedList) {
+            // Not on the list yet
+            mRenderedNext = gRendered;
+            gRendered = this;
+            mOnRenderedList = true;
+        }
+        mRenderMark = gRenderMark;
+    }
+
+    public static function renderComplete(renderSession : RenderSession)
+    {
+        var bd = gRendered;
+        var prev : BitmapData = null;
+
+        while (bd != null) {
+            if (bd.mRenderMark == gRenderMark) {
+                prev = bd;
+                bd = bd.mRenderedNext;
+            }
+            else {
+                var next = bd.mRenderedNext;
+                if (prev == null) {
+                    gRendered = next;
+                }
+                else {
+                    prev.mRenderedNext = next;
+                }
+                bd.mOnRenderedList = false;
+                bd.mRenderedNext = null;
+                bd.cleanup(renderSession);
+                bd = next;
+            }
+        }
+
+        gRenderMark = (gRenderMark == 0) ? 1 : 0;
+    }
 	
 	public function getTexture (gl:GLRenderContext):GLTexture {
 		
@@ -773,7 +861,7 @@ class BitmapData implements IBitmapDrawable {
 			
 			if (textureImage.type == DATA) {
 				
-				gl.texImage2D (gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format, gl.UNSIGNED_BYTE, textureImage.data);
+				gl.texImage2D (gl.TEXTURE_2D, 0, internalFormat, textureImage.buffer.width, textureImage.buffer.height, 0, format, gl.UNSIGNED_BYTE, textureImage.data);
 				
 			} else {
 				
@@ -782,9 +870,20 @@ class BitmapData implements IBitmapDrawable {
 			}
 			
 			#else
-			
-			gl.texImage2D (gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format, gl.UNSIGNED_BYTE, textureImage.data);
-			
+
+            if (textureImage.data == null) {
+                trace("BitmapData has no textureImage.data!");
+            }
+            else if (textureImage.data.length <
+                     (textureImage.buffer.width * textureImage.buffer.height)) {
+                trace("BitmapData has not enough textureImage.data: " +
+                      textureImage.data.length + " < " +
+                      (textureImage.buffer.width * textureImage.buffer.height));
+            }
+            else {
+                gl.texImage2D (gl.TEXTURE_2D, 0, internalFormat, textureImage.buffer.width, textureImage.buffer.height, 0, format, gl.UNSIGNED_BYTE, textureImage.data);
+			}
+            
 			#end
 			
 			gl.bindTexture (gl.TEXTURE_2D, null);
@@ -1182,6 +1281,40 @@ class BitmapData implements IBitmapDrawable {
 		
 	}
 	
+	private inline function __fromPixels (bytes:ByteArray, rawAlpha:ByteArray = null, ?onload:BitmapData -> Void, width: Int, height: Int):Void {
+		
+		Image.fromPixels (bytes, function (image) {
+			
+			__fromImage (image);
+			
+			if (rawAlpha != null) {
+				
+				#if (js && html5)
+				ImageCanvasUtil.convertToCanvas (image);
+				ImageCanvasUtil.createImageData (image);
+				#end
+				
+				var data = image.buffer.data;
+				
+				for (i in 0...rawAlpha.length) {
+					
+					data[i * 4 + 3] = rawAlpha.readUnsignedByte ();
+					
+				}
+				
+				image.version++;
+				
+			}
+			
+			if (onload != null) {
+				
+				onload (this);
+				
+			}
+			
+		}, width, height);
+		
+	}
 	
 	private function __fromFile (path:String, onload:BitmapData -> Void, onerror:Void -> Void):Void {
 		

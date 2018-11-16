@@ -54,6 +54,15 @@ class DisplayObject extends EventDispatcher implements IBitmapDrawable #if !disa
 	public var height (get, set):Float;
 	public var loaderInfo (default, null):LoaderInfo;
 	public var mask (get, set):DisplayObject;
+   /**
+    * This is a special TiVo-added property which does not conform to the
+    * normal Flash API.  This property controls whether or not areas outside
+    * of the mask will be invisible (the default, Flash-API-compliant
+    * behavior), or visible (TiVo specific special behavior).  This property
+    * only has meaning if a mask that does not entirely cover the display
+    * object is applied.
+    **/
+    public var nonMaskedVisible(get, set) : Bool;
 	public var mouseX (get, null):Float;
 	public var mouseY (get, null):Float;
 	public var name (get, set):String;
@@ -87,6 +96,7 @@ class DisplayObject extends EventDispatcher implements IBitmapDrawable #if !disa
 	private var __interactive:Bool;
 	private var __isMask:Bool;
 	private var __mask:DisplayObject;
+    private var __nonMaskedVisible : Bool;
 	private var __name:String;
 	private var __objectTransform:Transform;
 	private var __renderable:Bool;
@@ -842,13 +852,22 @@ class DisplayObject extends EventDispatcher implements IBitmapDrawable #if !disa
 		return __cacheAsBitmapMatrix = value.clone ();
 		
 	}
-	
+
+    // Filters are fetched on every render, so don't create an empty
+    // array every time to avoid churn.
+    private static var empty_filters : Array<BitmapFilter> = [ ];
 	
 	private function get_filters ():Array<BitmapFilter> {
 		
 		if (__filters == null) {
+
+            // If someone has modified the one that was given out, make a
+            // new one
+            if (empty_filters.length > 0) {
+                empty_filters = [ ];
+            }
 			
-			return new Array ();
+			return empty_filters;
 			
 		} else {
 			
@@ -949,7 +968,22 @@ class DisplayObject extends EventDispatcher implements IBitmapDrawable #if !disa
 	}
 	
 	
-	private function get_mouseX ():Float {
+	private function get_nonMaskedVisible() : Bool
+    {
+		return __nonMaskedVisible;
+	}
+	
+	
+	private function set_nonMaskedVisible(v : Bool) : Bool
+    {
+        if (v != __nonMaskedVisible) {
+            __nonMaskedVisible = v;
+        }
+        return __nonMaskedVisible;
+    }
+
+
+    private function get_mouseX ():Float {
 		
 		var mouseX = (stage != null ? stage.__mouseX : Lib.current.stage.__mouseX);
 		var mouseY = (stage != null ? stage.__mouseY : Lib.current.stage.__mouseY);

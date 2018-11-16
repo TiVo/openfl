@@ -23,6 +23,8 @@
 	<haxelib name="${custom-backend}" if="custom-backend" unless="display" />
 
 	<section unless="custom-backend">
+
+        <set name="NDLL_NAME" value="openfl" />
 		
 		<section if="native">
 			
@@ -56,6 +58,12 @@
 			<dependency path="dependencies/soundjs.min.js" />
 			
 		</section>
+
+        <section if="android">
+            <dependency name="${NDLL_NAME}" path="dependencies/android" />
+            <android extension="org.haxe.extension.Extension" />
+            <android extension="openfl.display.SoftKeyboardStateProvider" />
+        </section>
 		
 	</section>
 	

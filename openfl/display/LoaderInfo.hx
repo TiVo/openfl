@@ -31,7 +31,7 @@ class LoaderInfo extends EventDispatcher {
 	public var parentAllowsChild (default, null):Bool;
 	public var sameDomain (default, null):Bool;
 	public var sharedEvents (default, null):EventDispatcher;
-	public var uncaughtErrorEvents (default, null):UncaughtErrorEvents;
+	public var uncaughtErrorEvents (get, null):UncaughtErrorEvents;
 	public var url (default, null):String;
 	public var width (default, null):Int;
 	//static function getLoaderInfoByDefinition(object : Dynamic) : LoaderInfo;
@@ -53,7 +53,6 @@ class LoaderInfo extends EventDispatcher {
 	public static function create (loader:Loader):LoaderInfo {
 		
 		var loaderInfo = new LoaderInfo ();
-		loaderInfo.uncaughtErrorEvents = new UncaughtErrorEvents ();
 		
 		if (loader != null) {
 			
@@ -68,6 +67,19 @@ class LoaderInfo extends EventDispatcher {
 		return loaderInfo;
 		
 	}
+
+    // Don't create an uncaughtErrorEvents instance until one is needed,
+    // to avoid unnecessary object creation and thus churn.
+    private var mUncaughtErrorEvents : UncaughtErrorEvents;
+    
+    private function get_uncaughtErrorEvents() : UncaughtErrorEvents
+    {
+        if (mUncaughtErrorEvents == null) {
+            mUncaughtErrorEvents = new UncaughtErrorEvents();            
+        }
+
+        return mUncaughtErrorEvents;
+    }
 	
 	
 }

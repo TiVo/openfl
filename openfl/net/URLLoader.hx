@@ -1,5 +1,10 @@
 package openfl.net;
 
+// Single threaded native implementations use a CURL multi timer polling based
+// implementation
+#if (LIME_SINGLE_THREADED && cpp)
+typedef URLLoader = URLLoaderMulti;
+#else
 
 import lime.app.Event;
 import lime.system.BackgroundWorker;
@@ -105,7 +110,16 @@ class URLLoader extends EventDispatcher {
 					
 				}
 				
-				var bytes:ByteArray = Bytes.readFile (path);
+                // In order to allow all platforms to open file URLs in an
+                // identical manner, if the path is relative, use
+                // Assets.getBytes()
+                var bytes : ByteArray;
+                if ((path.length > 0) && (path.charAt(0) != "/")) {
+                    bytes = openfl.Assets.getBytes(path);
+                }
+                else {
+                    bytes = Bytes.readFile (path);
+                }
 				worker.sendComplete (bytes);
 				
 			});
@@ -423,6 +437,9 @@ class URLLoader extends EventDispatcher {
 		CURLEasy.setopt (__curl, SSL_VERIFYHOST, 0);
 		CURLEasy.setopt (__curl, USERAGENT, "libcurl-agent/1.0");
 		CURLEasy.setopt (__curl, CONNECTTIMEOUT, 30);
+        // this will disable resolv timeout set above as using SIGALRM is unsafe
+        // in multithreaded environment
+		CURLEasy.setopt (__curl, NOSIGNAL, true);
 		CURLEasy.setopt (__curl, TRANSFERTEXT, dataFormat == BINARY ? 0 : 1);
 		
 		var worker = new BackgroundWorker ();
@@ -628,3 +645,5 @@ class URLLoader extends EventDispatcher {
 
 
 typedef XMLHttpRequestProgressEvent = Dynamic;
+
+#end

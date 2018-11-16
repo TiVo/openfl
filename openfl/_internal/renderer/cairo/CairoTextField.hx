@@ -197,8 +197,8 @@ class CairoTextField {
 				
 				if (group.lineIndex < textField.scrollV - 1) continue;
 				if (group.lineIndex > textField.scrollV + textEngine.bottomScrollV - 2) break;
-				
-				color = group.format.color;
+				color = ((group.format.font_color == null) ?
+                         group.format.color : group.format.font_color);
 				r = ((color & 0xFF0000) >>> 16) / 0xFF;
 				g = ((color & 0x00FF00) >>> 8) / 0xFF;
 				b = (color & 0x0000FF) / 0xFF;

@@ -86,6 +86,8 @@ class XMLSocket extends EventDispatcher {
 		
 		__socket.addEventListener (Event.CONNECT, onOpenHandler);
 		__socket.addEventListener (ProgressEvent.SOCKET_DATA, onMessageHandler);
+        __socket.addEventListener (Event.CLOSE, onCloseHandler);
+        __socket.addEventListener (IOErrorEvent.IO_ERROR, onErrorHandler);
 		
 		#end
 		

@@ -401,7 +401,7 @@ class DisplayObjectContainer extends InteractiveObject {
 		
 		for (child in __children) {
 			
-			if (child.scaleX == 0 || child.scaleY == 0) continue;
+			if (child.scaleX == 0 || child.scaleY == 0 || child.__isMask) continue;
 			child.__getBounds (rect, child.__worldTransform);
 			
 		}

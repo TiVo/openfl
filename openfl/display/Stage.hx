@@ -84,6 +84,7 @@ class Stage extends DisplayObjectContainer implements IModule {
 	public var stageFocusRect:Bool;
 	public var stageHeight (default, null):Int;
 	public var stageWidth (default, null):Int;
+	public var screenScale (get, null):Float;
 	
 	public var window (default, null):Window;
 	
@@ -129,8 +130,11 @@ class Stage extends DisplayObjectContainer implements IModule {
 		
 		this.application = window.application;
 		this.window = window;
-		
-		if (color == null) {
+
+        // Special handling of background value: if the color is null, or if
+        // the topmost byte is anything other than 0, then make the background
+        // transparent.
+        if ((color == null) || ((color & 0xFF000000) != 0)) {
 			
 			__transparent = true;
 			this.color = 0x000000;
@@ -586,6 +590,9 @@ class Stage extends DisplayObjectContainer implements IModule {
 					
 					#if (!disable_cffi && (!html5 || !canvas))
 					__renderer = new GLRenderer (stageWidth, stageHeight, gl);
+                    if (this.__transparent) {
+                        __renderer.transparent = true;
+                    }
 					#end
 				
 				case CANVAS (context):
@@ -720,6 +727,12 @@ class Stage extends DisplayObjectContainer implements IModule {
 		//if (this.window == null || this.window != window) return;
 		
 	}
+
+
+    // Use re-usable event objects so as not to create and churn new instances
+    // every single frame.
+    private static var gEnterFrameEvent = new Event(Event.ENTER_FRAME);
+    private static var gRenderEvent = new Event(Event.RENDER);
 	
 	
 	public function render (renderer:Renderer):Void {
@@ -748,12 +761,12 @@ class Stage extends DisplayObjectContainer implements IModule {
 			
 		}
 		
-		__broadcast (new Event (Event.ENTER_FRAME), true);
+		__broadcast (gEnterFrameEvent, true);
 		
 		if (__invalidated) {
 			
 			__invalidated = false;
-			__broadcast (new Event (Event.RENDER), true);
+			__broadcast (gRenderEvent, true);
 			
 		}
 		
@@ -786,7 +799,9 @@ class Stage extends DisplayObjectContainer implements IModule {
 			}
 			
 			__renderer.render (this);
-			
+
+            @:privateAccess BitmapData.renderComplete
+                (__renderer.renderSession);
 		}
 		
 		#if hxtelemetry
@@ -920,7 +935,11 @@ class Stage extends DisplayObjectContainer implements IModule {
 		return true;
 		
 	}
-	
+
+
+    // Avoid churn by not creating a new key stack every time, since only one
+    // is needed at a time and it can be re-used.
+    private var mOnKeyStack = new Array<DisplayObject>();
 	
 	private function __onKey (type:String, keyCode:KeyCode, modifier:KeyModifier):Void {
 		
@@ -928,20 +947,20 @@ class Stage extends DisplayObjectContainer implements IModule {
 		MouseEvent.__commandKey = modifier.metaKey;
 		MouseEvent.__ctrlKey = modifier.ctrlKey;
 		MouseEvent.__shiftKey = modifier.shiftKey;
-		
-		var stack = new Array <DisplayObject> ();
-		
+
+        mOnKeyStack.splice(0, mOnKeyStack.length);
+        
 		if (__focus == null) {
 			
-			__getInteractive (stack);
+			__getInteractive (mOnKeyStack);
 			
 		} else {
 			
-			__focus.__getInteractive (stack);
+			__focus.__getInteractive (mOnKeyStack);
 			
 		}
 		
-		if (stack.length > 0) {
+		if (mOnKeyStack.length > 0) {
 			
 			var keyLocation = Keyboard.__getKeyLocation (keyCode);
 			var keyCode = Keyboard.__convertKeyCode (keyCode);
@@ -949,8 +968,18 @@ class Stage extends DisplayObjectContainer implements IModule {
 			
 			var event = new KeyboardEvent (type, true, false, charCode, keyCode, keyLocation, __macKeyboard ? modifier.ctrlKey || modifier.metaKey : modifier.ctrlKey, modifier.altKey, modifier.shiftKey, modifier.ctrlKey, modifier.metaKey);
 			
-			stack.reverse ();
-			__fireEvent (event, stack);
+			mOnKeyStack.reverse ();
+
+            // logging to help catch issues where the applications like
+            // hydra/encore leave focus on a component that is NOT on stage. We
+            // don't get any keys delivered to Stage in that case and hence the
+            // KeyManagerImpl listening on the Stage never sees any keys
+            // further.
+            if (mOnKeyStack[0] != this) {
+                trace("WARNING: There is no Stage in focus chain. Ignored??? " + type + " " + keyCode);
+            }
+
+			__fireEvent (event, mOnKeyStack);
 			
 			if (event.__isCanceled) {
 				
@@ -1475,7 +1504,7 @@ class Stage extends DisplayObjectContainer implements IModule {
 				
 			}
 			
-			if (__focus != null) {
+			if (value != null) {
 				
 				var event = new FocusEvent (FocusEvent.FOCUS_IN, true, false, oldFocus, false, 0);
 				__stack = [];
@@ -1528,6 +1557,15 @@ class Stage extends DisplayObjectContainer implements IModule {
 	private override function get_mouseY ():Float {
 		
 		return __mouseY;
+		
+	}
+	
+	
+	private function get_screenScale ():Float {
+
+
+		// TIVO: Emulate 720p -> 1080p screen scale
+		return 1.5;
 		
 	}
 	

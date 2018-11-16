@@ -114,20 +114,53 @@ import lime.ui.KeyCode;
 	public static inline var RIGHTBRACKET = 221;
 	public static inline var QUOTE = 222;
 
-#if tivo_android
     // Same as TiVoKeyCodes.SELECT
-    public static inline var FIRETV_DPAD_CENTER = 0xf00c;
+    public static inline var STB_REMOTE_DPAD_CENTER = 0xf00c;
     // Same as TiVoKeyCodes.PLAY
-    public static inline var FIRETV_MEDIA_PLAY_PAUSE = 0xf051;
+    public static inline var STB_REMOTE_MEDIA_PLAY_PAUSE = 0xf051;
+    // Same as TiVoKeyCodes.STOP
+    public static inline var STB_REMOTE_MEDIA_STOP = 0xf052;
+    // Same as TiVoKeyCodes.VOICE
+    public static inline var STB_REMOTE_VOICE = 0xf52f;
     // Same as TiVoKeyCodes.REVERSE
-    public static inline var FIRETV_MEDIA_REWIND = 0xf059;
+    public static inline var STB_REMOTE_MEDIA_REWIND = 0xf059;
     // Same as TiVoKeyCodes.FORWARD
-    public static inline var FIRETV_MEDIA_FAST_FORWARD = 0xf05a;
+    public static inline var STB_REMOTE_MEDIA_FAST_FORWARD = 0xf05a;
     // Same as TiVoKeyCodes.TIVO
-    public static inline var FIRETV_MENU = 0xf500;
+    public static inline var STB_REMOTE_MENU = 0xf500;
+    // Same as TiVoKeyCodes.BACK
+    public static inline var STB_REMOTE_BACK = 0xf048;
+    // Same as TiVoKeyCodes.PRINT_SCREEN
+    public static inline var STB_REMOTE_PRINT_SCREEN = 0xf009;
+    // Same as TiVoKeyCodes.CHANNELUP
+    public static inline var STB_REMOTE_CHANNELUP = 0xf046;
+    // Same as TiVoKeyCodes.CHANNELDOWN
+    public static inline var STB_REMOTE_CHANNELDOWN = 0xf047;
+    // Same as TiVoKeyCodes.GUIDE
+    public static inline var STB_REMOTE_GUIDE = 0xf01b;
+    // Same as TiVoKeyCodes.RECORD
+    public static inline var STB_REMOTE_RECORD = 0xf056;
     // Same as TiVoKeyCodes.REPLAY
-    public static inline var FIRETV_BACK = 0xf05b;
-#end
+    public static inline var STB_REMOTE_REPLAY = 0xf05b;
+    // Same as TiVoKeyCodes.INFO
+    public static inline var STB_REMOTE_INFO = 0xf014;
+    // Same as TiVoKeyCodes.VIDEO_ON_DEMAND
+    public static inline var STB_REMOTE_VIDEO_ON_DEMAND = 0xf527;
+    // Same as TiVoKeyCodes.EXIT
+    public static inline var STB_REMOTE_EXIT = 0xf062;
+    // Same as TiVoKeyCodes.ADVANCE
+    public static inline var STB_REMOTE_ADVANCE = 0xf05c;
+    // Same as TiVoKeyCodes.ACCESSIBILITY
+    public static inline var STB_REMOTE_ACCESSIBILITY = 0xf532;
+    // Same as TiVoKeyCodes.CLEAR
+    public static inline var STB_REMOTE_CLEAR = 0xf00e;
+
+    // Special remote control menu buttons
+    // Same as iris KeyCodes.TV
+    public static inline var REMOTE_TV = 0x55555555;
+    // Same as iris KeyCodes.APPS
+    public static inline var REMOTE_APPS = 0x77777777;
+    
 	
 	public static var capsLock (default, null):Bool;
 	public static var numLock (default, null):Bool;
@@ -223,14 +256,36 @@ import lime.ui.KeyCode;
 			case KeyCode.F5: Keyboard.F5;
 			case KeyCode.F6: Keyboard.F6;
 			case KeyCode.F7: Keyboard.F7;
+#if android
+			// For FireTV, we can't directly use the PrintScreen key code
+			// (KeyCode.PRINT_SCREEN which is converted by SDL from Android's
+			// AKEYCODE_SYSRQ key code, see lime lib's SDL_androidkeyboard.c).
+			// This because this key code is always intercepted by the Android
+			// system which tries to start service intent
+			// com.android.systemui/.screenshot.TakeScreenshotService.
+			case KeyCode.F8: Keyboard.STB_REMOTE_PRINT_SCREEN;
+			// For the android devices which supports F9 key (Amino device)
+			// the "F9" key code should launch Video On Demand
+			case KeyCode.F9: Keyboard.STB_REMOTE_VIDEO_ON_DEMAND;
+#else
 			case KeyCode.F8: Keyboard.F8;
 			case KeyCode.F9: Keyboard.F9;
+#end
+#if android
+            case KeyCode.F10: Keyboard.STB_REMOTE_EXIT;
+            case KeyCode.F11: Keyboard.STB_REMOTE_ACCESSIBILITY;
+#else
 			case KeyCode.F10: Keyboard.F10;
 			case KeyCode.F11: Keyboard.F11;
+#end
 			case KeyCode.F12: Keyboard.F12;
 			case KeyCode.PRINT_SCREEN: 301;
 			case KeyCode.SCROLL_LOCK: 145;
+#if tvos
+            case KeyCode.PAUSE: Keyboard.STB_REMOTE_MEDIA_PLAY_PAUSE;
+#else
             case KeyCode.PAUSE: Keyboard.BREAK;
+#end
 			case KeyCode.INSERT: Keyboard.INSERT;
 			case KeyCode.HOME: Keyboard.HOME;
 			case KeyCode.PAGE_UP: Keyboard.PAGE_UP;
@@ -263,28 +318,32 @@ import lime.ui.KeyCode;
 			case KeyCode.F13: Keyboard.F13;
 			case KeyCode.F14: Keyboard.F14;
 			case KeyCode.F15: Keyboard.F15;
-#if tivo_android
-            case KeyCode.F16: Keyboard.FIRETV_MEDIA_REWIND;
-            case KeyCode.F17: Keyboard.FIRETV_MEDIA_FAST_FORWARD;
+#if android
+            case KeyCode.F16: Keyboard.STB_REMOTE_MEDIA_REWIND;
+            case KeyCode.F17: Keyboard.STB_REMOTE_MEDIA_FAST_FORWARD;
+            case KeyCode.F18: Keyboard.STB_REMOTE_CHANNELUP;
+            case KeyCode.F19: Keyboard.STB_REMOTE_CHANNELDOWN;
+            case KeyCode.F20: Keyboard.STB_REMOTE_GUIDE;
+            case KeyCode.F21: Keyboard.STB_REMOTE_RECORD;
 #else
 			//case KeyCode.F16: 0x4000006B;
 			//case KeyCode.F17: 0x4000006C;
-#end
 			//case KeyCode.F18: 0x4000006D;
 			//case KeyCode.F19: 0x4000006E;
 			//case KeyCode.F20: 0x4000006F;
 			//case KeyCode.F21: 0x40000070;
+#end
 			//case KeyCode.F22: 0x40000071;
 			//case KeyCode.F23: 0x40000072;
 			//case KeyCode.F24: 0x40000073;
 			//case KeyCode.EXECUTE: 0x40000074;
 			//case KeyCode.HELP: 0x40000075;
-#if tivo_android
-            case KeyCode.MENU: Keyboard.FIRETV_MENU;
-            // FireTV key
-            case KeyCode.SELECT: Keyboard.FIRETV_DPAD_CENTER;
+#if (android || tvos)
+            case KeyCode.F22: Keyboard.REMOTE_APPS;
+            case KeyCode.F23: Keyboard.STB_REMOTE_INFO;
+            case KeyCode.SELECT: Keyboard.STB_REMOTE_DPAD_CENTER;
+            case KeyCode.MENU: Keyboard.STB_REMOTE_MENU;
 #else
-			//case KeyCode.MENU: 0x40000076;
 			//case KeyCode.SELECT: 0x40000077;
 #end
 			//case KeyCode.STOP: 0x40000078;
@@ -302,7 +361,11 @@ import lime.ui.KeyCode;
 			//case KeyCode.ALT_ERASE: 0x40000099;
 			//case KeyCode.SYSTEM_REQUEST: 0x4000009A;
 			//case KeyCode.CANCEL: 0x4000009B;
+#if android
+            case KeyCode.CLEAR: Keyboard.STB_REMOTE_CLEAR;
+#else
 			//case KeyCode.CLEAR: 0x4000009C;
+#end
 			//case KeyCode.PRIOR: 0x4000009D;
 			case KeyCode.RETURN2: Keyboard.ENTER;
 			//case KeyCode.SEPARATOR: 0x4000009F;
@@ -368,13 +431,20 @@ import lime.ui.KeyCode;
 			//case KeyCode.MODE: 0x40000101;
 			//case KeyCode.AUDIO_NEXT: 0x40000102;
 			//case KeyCode.AUDIO_PREVIOUS: 0x40000103;
-			//case KeyCode.AUDIO_STOP: 0x40000104;
-#if tivo_android
+#if android
+            // FireTV via SDL maps the stop button to "audio stop",
+            // which we want as STOP
+            case KeyCode.AUDIO_STOP: Keyboard.STB_REMOTE_MEDIA_STOP;
             // FireTV via SDL maps the play/pause button to "audio play",
             // which we want as PLAY
-            case KeyCode.AUDIO_PLAY: Keyboard.FIRETV_MEDIA_PLAY_PAUSE;
+            case KeyCode.AUDIO_PLAY: Keyboard.STB_REMOTE_MEDIA_PLAY_PAUSE;
+            // AndroidTV via SDL maps "voice key" as search key 
+            // which we want as voice key
+            case KeyCode.APP_CONTROL_SEARCH: Keyboard.STB_REMOTE_VOICE; 
 #else
+			//case KeyCode.AUDIO_STOP: 0x40000104;
 			//case KeyCode.AUDIO_PLAY: 0x40000105;
+            //case KeyCode.APP_CONTROL_SEARCH: 0x4000010C;
 #end
 			//case KeyCode.AUDIO_MUTE: 0x40000106;
 			//case KeyCode.MEDIA_SELECT: 0x40000107;
@@ -382,11 +452,14 @@ import lime.ui.KeyCode;
 			//case KeyCode.MAIL: 0x40000109;
 			//case KeyCode.CALCULATOR: 0x4000010A;
 			//case KeyCode.COMPUTER: 0x4000010B;
-			//case KeyCode.APP_CONTROL_SEARCH: 0x4000010C;
-			//case KeyCode.APP_CONTROL_HOME: 0x4000010D;
-#if tivo_android
-            case KeyCode.APP_CONTROL_BACK: Keyboard.FIRETV_BACK;
+#if android
+            // AndroidTV via SDL maps the "HOME" key to APP_CONTROL_HOME,
+            // which we want to treat like the STB TiVo button, which is
+            // technically known as STB_REMOTE_MENU
+            case KeyCode.APP_CONTROL_HOME: Keyboard.STB_REMOTE_MENU;
+            case KeyCode.APP_CONTROL_BACK: Keyboard.STB_REMOTE_BACK;
 #else
+			//case KeyCode.APP_CONTROL_HOME: 0x4000010D;
 			//case KeyCode.APP_CONTROL_BACK: 0x4000010E;
 #end
 			//case KeyCode.APP_CONTROL_FORWARD: 0x4000010F;
@@ -401,6 +474,18 @@ import lime.ui.KeyCode;
 			//case KeyCode.BACKLIGHT_UP: 0x40000118;
 			//case KeyCode.EJECT: 0x40000119;
 			//case KeyCode.SLEEP: 0x4000011A;
+#if android
+            // AndroidTV via SDL maps the "REPLAY" key to BACKLIGHT_TOGGLE,
+            // which we want to treat like the STB TiVo button, which is
+            // technically known as STB_REMOTE_REPLAY
+            case KeyCode.BACKLIGHT_TOGGLE: Keyboard.STB_REMOTE_REPLAY;
+            // SDL maps "last" remote key to lime KeyCode.BACKLIGHT_DOWN,
+            // which we map to ENTER
+            case KeyCode.BACKLIGHT_DOWN: Keyboard.ENTER;
+            // SDL maps "next channel" remote key to lime
+            // KeyCode.BACKLIGHT_UP, which we map to STB_REMOTE_ADVANCE
+            case KeyCode.BACKLIGHT_UP: Keyboard.STB_REMOTE_ADVANCE;
+#end
 			default: cast key;
 			
 		}

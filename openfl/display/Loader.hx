@@ -23,7 +23,8 @@ class Loader extends DisplayObjectContainer {
 	
 	private var mImage:BitmapData;
 	private var mShape:Shape;
-	
+	private var mClosed : Bool = false;
+    private var mLoader : URLLoader;
 	
 	public function new () {
 		
@@ -34,14 +35,25 @@ class Loader extends DisplayObjectContainer {
 	}
 	
 	
-	public function close ():Void {
+	public function close () : Void
+	{
 		
-		openfl.Lib.notImplemented ("Loader.close");
-		
+		mClosed = true;
+
+        if (mLoader != null) {
+            mLoader.close();
+            mLoader = null;
+        }
+        
 	}
 	
 	
 	public function load (request:URLRequest, context:LoaderContext = null):Void {
+
+        if (mLoader != null) {
+            mLoader.close();
+            mLoader = null;
+        }
 		
 		var extension = "";
 		var parts = request.url.split (".");
@@ -82,20 +94,26 @@ class Loader extends DisplayObjectContainer {
 		
 		#if sys
 		if (request.url != null && request.url.indexOf ("http://") > -1 || request.url.indexOf ("https://") > -1) {
-			
-			var loader = new URLLoader ();
-			loader.addEventListener (Event.COMPLETE, function (e) {
-				
-				BitmapData_onLoad (BitmapData.fromBytes (loader.data));
+
+			mLoader = new URLLoader ();
+			mLoader.addEventListener (Event.COMPLETE, function (e) {
+				if (!mClosed)
+				{
+					BitmapData_onLoad (BitmapData.fromBytes (mLoader.data));
+				}
+				else
+				{
+					mLoader.data = null;
+				}
 				
 			});
-			loader.addEventListener (IOErrorEvent.IO_ERROR, function (e) {
+			mLoader.addEventListener (IOErrorEvent.IO_ERROR, function (e) {
 				
 				BitmapData_onError (e);
 				
 			});
-			loader.dataFormat = URLLoaderDataFormat.BINARY;
-			loader.load (request);
+			mLoader.dataFormat = URLLoaderDataFormat.BINARY;
+			mLoader.load (request);
 			return;
 			
 		} else 

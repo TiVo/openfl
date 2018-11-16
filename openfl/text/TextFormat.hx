@@ -22,6 +22,9 @@ class TextFormat {
 	public var target:String;
 	public var underline:Null<Bool>;
 	public var url:String;
+
+    // Set to override the color via an HTML font tag
+    public var font_color : Null<Int>;
 	
 	
 	public function new (font:String = null, size:Null<Int> = null, color:Null<Int> = null, bold:Null<Bool> = null, italic:Null<Bool> = null, underline:Null<Bool> = null, url:String = null, target:String = null, align:TextFormatAlign = null, leftMargin:Null<Int> = null, rightMargin:Null<Int> = null, indent:Null<Int> = null, leading:Null<Int> = null) {
@@ -39,6 +42,7 @@ class TextFormat {
 		this.rightMargin = rightMargin;
 		this.indent = indent;
 		this.leading = leading;
+        this.font_color = null;
 		
 	}
 	
@@ -58,6 +62,8 @@ class TextFormat {
 		newFormat.kerning = kerning;
 		newFormat.letterSpacing = letterSpacing;
 		newFormat.tabStops = tabStops;
+
+        newFormat.font_color = font_color;
 		
 		return newFormat;
 		
@@ -84,6 +90,7 @@ class TextFormat {
 		if (format.kerning != null) kerning = format.kerning;
 		if (format.letterSpacing != null) letterSpacing = format.letterSpacing;
 		if (format.tabStops != null) tabStops = format.tabStops;
+        if (format.font_color != null) font_color = format.font_color;
 		
 	}
 	

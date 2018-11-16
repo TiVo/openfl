@@ -57,7 +57,8 @@ class GLShape {
 				
 				gl.uniform1f (shader.data.uAlpha.index, shape.__worldAlpha);
 				gl.uniformMatrix4fv (shader.data.uMatrix.index, false, renderer.getMatrix (graphics.__worldTransform));
-				
+                
+                gl.activeTexture (gl.TEXTURE1);
 				gl.bindTexture (gl.TEXTURE_2D, graphics.__bitmap.getTexture (gl));
 				
 				gl.texParameteri (gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -69,8 +70,10 @@ class GLShape {
 				
 				gl.drawArrays (gl.TRIANGLE_STRIP, 0, 4);
 				
+                graphics.__bitmap.rendered();
+                    
 				renderSession.maskManager.popObject (shape);
-				
+
 			}
 			
 		}

@@ -42,7 +42,8 @@ class GLBitmap {
 			
 			gl.uniform1f (shader.data.uAlpha.index, bitmap.__worldAlpha);
 			gl.uniformMatrix4fv (shader.data.uMatrix.index, false, renderer.getMatrix (bitmap.__worldTransform));
-			
+
+            gl.activeTexture (gl.TEXTURE1);
 			gl.bindTexture (gl.TEXTURE_2D, bitmap.bitmapData.getTexture (gl));
 			
 			if (bitmap.smoothing || bitmap.stage.__displayMatrix.a != 1 || bitmap.stage.__displayMatrix.d != 1) {
@@ -62,6 +63,8 @@ class GLBitmap {
 			gl.vertexAttribPointer (shader.data.aTexCoord.index, 2, gl.FLOAT, false, 5 * Float32Array.BYTES_PER_ELEMENT, 3 * Float32Array.BYTES_PER_ELEMENT);
 			
 			gl.drawArrays (gl.TRIANGLE_STRIP, 0, 4);
+
+            bitmap.bitmapData.rendered();
 			
 			renderSession.maskManager.popObject (bitmap);
 			

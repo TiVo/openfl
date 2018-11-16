@@ -152,16 +152,22 @@ class Timer extends EventDispatcher {
 		
 		currentCount ++;
 		
-		if (repeatCount > 0 && currentCount >= repeatCount) {
-			
-			stop ();
-			dispatchEvent (new TimerEvent (TimerEvent.TIMER));
-			dispatchEvent (new TimerEvent (TimerEvent.TIMER_COMPLETE));
+        // All timers must be stopped before any events are dispatched in case
+        // the event dispatch itself wants to re-start the timer
+        
+		if (repeatCount > 0) {
+            var is_complete = (currentCount >= repeatCount);
+            if (is_complete) {
+                stop();
+            }
+            dispatchEvent(new TimerEvent(TimerEvent.TIMER));
+            if (is_complete) {
+                dispatchEvent(new TimerEvent(TimerEvent.TIMER_COMPLETE));
+            }
 			
 		} else {
-			
-			dispatchEvent (new TimerEvent (TimerEvent.TIMER));
-			
+            stop();
+			dispatchEvent(new TimerEvent (TimerEvent.TIMER));
 		}
 		
 	}

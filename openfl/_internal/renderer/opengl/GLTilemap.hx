@@ -50,6 +50,7 @@ class GLTilemap {
 			
 			if (layer.__tiles.length == 0 || layer.tileset == null || layer.tileset.bitmapData == null) continue;
 			
+            gl.activeTexture (gl.TEXTURE1);
 			gl.bindTexture (gl.TEXTURE_2D, layer.tileset.bitmapData.getTexture (gl));
 			
 			tiles = layer.__tiles;
