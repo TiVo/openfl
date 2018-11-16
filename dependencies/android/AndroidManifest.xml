@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+    <manifest> tag, "package" attribute: must NOT be the same with 
+    PACKAGE_NAME from your include.xml file; the recommended value
+    is PACKAGE_NAME.NDLL_NAME.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.tivo.platform.video.android" >
+	
+    <!--
+        Add here any other Android-specific tags needed for your native 
+        implementation. For example, you might want to add number of
+        <uses-permission /> tags.
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+	
+	<!-- It is certainly the case that our Android targeted apps do
+	     not *require* touch screen, as they work on FireTV, which has
+	     no touch screen. -->
+	<uses-feature android:name="android.hardware.touchscreen"
+				  android:required="false" />
+
+</manifest>

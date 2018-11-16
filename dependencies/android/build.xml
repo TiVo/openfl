@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+    <project> tag, "name" attribute: an arbitrary name, but for clarity 
+    usage of the CLASS_NAME from your include.xml file is recommended.
+-->
+<project name="openfl" default="help">
+	
+	<property environment="env"/>
+	<property name="sdk.dir" value="${env.ANDROID_SDK}"/>
+
+	<property file="local.properties"/>
+	<property file="ant.properties"/>
+	<property file="project.properties"/>
+	
+	<import file="${sdk.dir}/tools/ant/build.xml"/>
+	
+</project>
