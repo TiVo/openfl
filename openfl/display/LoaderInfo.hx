@@ -2,6 +2,8 @@ package openfl.display;
 
 
 import openfl.events.EventDispatcher;
+import openfl.events.Event;
+import openfl.events.ProgressEvent;
 import openfl.events.UncaughtErrorEvents;
 import openfl.system.ApplicationDomain;
 import openfl.utils.ByteArray;
@@ -35,6 +37,8 @@ class LoaderInfo extends EventDispatcher {
 	public var url (default, null):String;
 	public var width (default, null):Int;
 	//static function getLoaderInfoByDefinition(object : Dynamic) : LoaderInfo;
+	
+	private var __completed:Bool;
 	
 	
 	private function new () {
@@ -80,6 +84,36 @@ class LoaderInfo extends EventDispatcher {
 
         return mUncaughtErrorEvents;
     }
+	
+	
+	private function __complete ():Void {
+		
+		if (!__completed) {
+			
+			if (bytesLoaded < bytesTotal) {
+				
+				bytesLoaded = bytesTotal;
+				
+			}
+			
+			__update (bytesLoaded, bytesTotal);
+			__completed = true;
+			
+			dispatchEvent (new Event (Event.COMPLETE));
+			
+		}
+		
+	}
+	
+	
+	private function __update (bytesLoaded:Int, bytesTotal:Int):Void {
+		
+		this.bytesLoaded = bytesLoaded;
+		this.bytesTotal = bytesTotal;
+		
+		dispatchEvent (new ProgressEvent (ProgressEvent.PROGRESS, false, false, bytesLoaded, bytesTotal));
+		
+	}
 	
 	
 }

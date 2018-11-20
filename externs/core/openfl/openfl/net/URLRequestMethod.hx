@@ -1,4 +1,4 @@
-package openfl.net;
+package openfl.net; #if (display || !flash)
 
 
 /**
@@ -56,3 +56,8 @@ package openfl.net;
 	public var PUT = "PUT";
 	
 }
+
+
+#else
+typedef URLRequestMethod = flash.net.URLRequestMethod;
+#end

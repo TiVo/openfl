@@ -10,6 +10,9 @@
 	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 	<meta name="apple-mobile-web-app-capable" content="yes">
 	
+	::if favicons::::foreach (favicons)::
+	<link rel="::__current__.rel::" type="::__current__.type::" href="::__current__.href::">::end::::end::
+	
 	::if linkedLibraries::::foreach (linkedLibraries)::
 	<script type="text/javascript" src="::__current__::"></script>::end::::end::
 	<script type="text/javascript" src="./::APP_FILE::.js"></script>
@@ -41,10 +44,12 @@
 </head>
 <body>
 	
+	<noscript>This webpage makes extensive use of JavaScript. Please enable JavaScript in your web browser to view this page.</noscript>
+	
 	<div id="openfl-content"></div>
 	
 	<script type="text/javascript">
-		lime.embed ("openfl-content", ::WIN_WIDTH::, ::WIN_HEIGHT::, "::WIN_FLASHBACKGROUND::");
+		::APP_FILE::.embed ("openfl-content", ::WIN_WIDTH::, ::WIN_HEIGHT::, "::WIN_FLASHBACKGROUND::");
 	</script>
 	
 </body>

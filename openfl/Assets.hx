@@ -1,5 +1,4 @@
 package openfl;
-#if !macro
 
 
 import haxe.CallStack;
@@ -7,8 +6,9 @@ import haxe.Unserializer;
 import lime.app.Future;
 import lime.app.Promise;
 import lime.text.Font in LimeFont;
-import lime.Assets.AssetLibrary in LimeAssetLibrary;
-import lime.Assets in LimeAssets;
+import lime.utils.AssetLibrary in LimeAssetLibrary;
+import lime.utils.Assets in LimeAssets;
+import lime.utils.Log;
 import openfl.display.Bitmap;
 import openfl.display.BitmapData;
 import openfl.display.MovieClip;
@@ -37,7 +37,6 @@ import openfl.utils.ByteArray;
  * in the project file.</p>
  */
 
-@:access(lime.Assets)
 @:access(openfl.AssetLibrary)
 @:access(openfl.display.BitmapData)
 @:access(openfl.text.Font)
@@ -48,7 +47,7 @@ class Assets {
 	
 	public static var cache:IAssetCache = new AssetCache ();
 	
-	private static var dispatcher = new EventDispatcher ();
+	private static var dispatcher:EventDispatcher #if !macro = new EventDispatcher () #end;
 	
 	
 	public static function addEventListener (type:String, listener:Dynamic, useCapture:Bool = false, priority:Int = 0, useWeakReference:Bool = false):Void {
@@ -155,7 +154,7 @@ class Assets {
 	 */
 	public static function getFont (id:String, useCache:Bool = true):Font {
 		
-		#if (tools && !display)
+		#if (tools && !display && !macro)
 		
 		if (useCache && cache.enabled && cache.hasFont (id)) {
 			
@@ -190,7 +189,7 @@ class Assets {
 	}
 	
 	
-	private static function getLibrary (name:String):LimeAssetLibrary {
+	public static function getLibrary (name:String):LimeAssetLibrary {
 		
 		return LimeAssets.getLibrary (name);
 		
@@ -221,19 +220,19 @@ class Assets {
 					
 				} else {
 					
-					printError ("[openfl.Assets] MovieClip asset \"" + id + "\" exists, but only asynchronously");
+					Log.info ("MovieClip asset \"" + id + "\" exists, but only asynchronously");
 					
 				}
 				
 			} else {
 				
-				printError ("[openfl.Assets] There is no MovieClip asset with an ID of \"" + id + "\"");
+				Log.info ("There is no MovieClip asset with an ID of \"" + id + "\"");
 				
 			}
 			
 		} else {
 			
-			printError ("[openfl.Assets] There is no asset library named \"" + libraryName + "\"");
+			Log.info ("There is no asset library named \"" + libraryName + "\"");
 			
 		}
 		
@@ -253,24 +252,9 @@ class Assets {
 	 */
 	public static function getMusic (id:String, useCache:Bool = true):Sound {
 		
-		#if flash
-		var buffer = LimeAssets.getAudioBuffer (id, useCache);
-		return (buffer != null) ? buffer.src : null;
-		#else
-		#if !html5
-		return Sound.fromAudioBuffer (LimeAssets.getAudioBuffer (id, useCache));
-		#else
-		var path = LimeAssets.getPath (id);
+		// TODO: Streaming sound
 		
-		if (path != null) {
-			
-			return new Sound (new URLRequest (path));
-			
-		}
-		
-		return null;
-		#end
-		#end
+		return getSound (id, useCache);
 		
 	}
 	
@@ -311,7 +295,6 @@ class Assets {
 			
 		}
 		
-		#if !html5
 		var buffer = LimeAssets.getAudioBuffer (id, false);
 		
 		if (buffer != null) {
@@ -331,15 +314,6 @@ class Assets {
 			return sound;
 			
 		}
-		#else
-		var path = LimeAssets.getPath (id);
-		
-		if (path != null) {
-			
-			return new Sound (new URLRequest (path));
-			
-		}
-		#end
 		
 		#end
 		
@@ -418,7 +392,7 @@ class Assets {
 	}
 	
 	
-	private static function isValidBitmapData (bitmapData:BitmapData):Bool {
+	@:analyzer(ignore) private static function isValidBitmapData (bitmapData:BitmapData):Bool {
 		
 		#if (tools && !display)
 		#if flash
@@ -563,11 +537,11 @@ class Assets {
 			promise.future.onComplete (handler);
 			promise.future.onError (function (_) handler (null));
 			
-			future.onComplete (function (bytes) promise.complete (bytes));
-			future.onProgress (function (progress) promise.progress (progress));
-			future.onError (function (msg) promise.error (msg));
-			
 		}
+		
+		future.onComplete (function (bytes) promise.complete (bytes));
+		future.onProgress (function (progress, total) promise.progress (progress, total));
+		future.onError (function (msg) promise.error (msg));
 		
 		return promise.future;
 		
@@ -595,7 +569,7 @@ class Assets {
 			
 		}
 		
-		#if (tools && !display)
+		#if (tools && !display && !macro)
 		
 		if (useCache && cache.enabled && cache.hasFont (id)) {
 			
@@ -672,10 +646,18 @@ class Assets {
 			if (buffer != null) {
 				
 				#if flash
-				promise.complete (buffer.src);
+				var sound = buffer.src;
 				#else
-				promise.complete (Sound.fromAudioBuffer (buffer));
+				var sound = Sound.fromAudioBuffer (buffer);
 				#end
+				
+				if (useCache && cache.enabled) {
+					
+					cache.setSound (id, sound);
+					
+				}
+				
+				promise.complete (sound);
 				
 			} else {
 				
@@ -757,8 +739,6 @@ class Assets {
 		
 		if (useCache == null) useCache = true;
 		
-		#if !html5
-		
 		var promise = new Promise<Sound> ();
 		
 		LimeAssets.loadAudioBuffer (id, useCache).onComplete (function (buffer) {
@@ -766,10 +746,18 @@ class Assets {
 			if (buffer != null) {
 				
 				#if flash
-				promise.complete (buffer.src);
+				var sound = buffer.src;
 				#else
-				promise.complete (Sound.fromAudioBuffer (buffer));
+				var sound = Sound.fromAudioBuffer (buffer);
 				#end
+				
+				if (useCache && cache.enabled) {
+					
+					cache.setSound (id, sound);
+					
+				}
+				
+				promise.complete (sound);
 				
 			} else {
 				
@@ -779,12 +767,6 @@ class Assets {
 			
 		}).onError (promise.error).onProgress (promise.progress);
 		return promise.future;
-		
-		#else
-		
-		return new Future<Sound> (function () return getSound (id, useCache));
-		
-		#end
 		
 	}
 	
@@ -865,18 +847,6 @@ class Assets {
 	}
 	
 	
-	private static inline function printError (message:String):Void {
-
-		#if debug
-		var callstack = CallStack.callStack ();
-		callstack.reverse();
-		trace (CallStack.toString (callstack) + "\n" + message);
-		#else
-		trace (message);
-		#end
-
-	}
-
 	
 	
 	// Event Handlers
@@ -958,7 +928,7 @@ class Assets {
 				
 				if (StringTools.startsWith (key, prefix)) {
 					
-					bitmapData.remove (key);
+					removeBitmapData (key);
 					
 				}
 				
@@ -970,7 +940,7 @@ class Assets {
 				
 				if (StringTools.startsWith (key, prefix)) {
 					
-					font.remove (key);
+					removeFont (key);
 					
 				}
 				
@@ -982,7 +952,7 @@ class Assets {
 				
 				if (StringTools.startsWith (key, prefix)) {
 					
-					sound.remove (key);
+					removeSound (key);
 					
 				}
 				
@@ -1037,6 +1007,7 @@ class Assets {
 	
 	public function removeBitmapData (id:String):Bool {
 		
+		LimeAssets.cache.image.remove (id);
 		return bitmapData.remove (id);
 		
 	}
@@ -1044,6 +1015,7 @@ class Assets {
 	
 	public function removeFont (id:String):Bool {
 		
+		LimeAssets.cache.font.remove (id);
 		return font.remove (id);
 		
 	}
@@ -1051,6 +1023,7 @@ class Assets {
 	
 	public function removeSound (id:String):Bool {
 		
+		LimeAssets.cache.audio.remove (id);
 		return sound.remove (id);
 		
 	}
@@ -1134,343 +1107,3 @@ class Assets {
 	var TEXT = "TEXT";
 	
 }
-
-
-#else
-
-
-import haxe.crypto.BaseCode;
-import haxe.io.Bytes;
-import haxe.macro.Context;
-import haxe.macro.Expr;
-import haxe.macro.Type;
-import haxe.Serializer;
-import sys.io.File;
-
-
-class Assets {
-	
-	
-	private static var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-	private static var base64Encoder:BaseCode;
-	
-	
-	private static function base64Encode (bytes:Bytes):String {
-		
-		var extension = switch (bytes.length % 3) {
-			
-			case 1: "==";
-			case 2: "=";
-			default: "";
-			
-		}
-		
-		if (base64Encoder == null) {
-			
-			base64Encoder = new BaseCode (Bytes.ofString (base64Chars));
-			
-		}
-		
-		return base64Encoder.encodeBytes (bytes).toString () + extension;
-		
-	}
-	
-	
-	macro public static function embedBitmap ():Array<Field> {
-		
-		#if html5
-		var fields = embedData (":bitmap", true);
-		#else
-		var fields = embedData (":bitmap");
-		#end
-		
-		if (fields != null) {
-			
-			var constructor = macro { 
-				
-				#if html5
-				
-				super (0, 0, transparent, fillRGBA);
-				
-				if (preload != null) {
-					
-					__fromImage(preload);
-					
-				} else {
-					
-					__fromBase64 (haxe.Resource.getString (resourceName), resourceType, function (b) {
-						
-						if (preload == null) {
-							
-							preload = b.image;
-							
-						}
-						
-						if (onload != null) {
-							
-							onload (b);
-							
-						}
-						
-					});
-					
-				}
-				
-				#else
-				
-				super (width, height, transparent, fillRGBA);
-				
-				#if lime_console
-				__fromFile (filePath, null, null);
-				#else
-				var byteArray = openfl.utils.ByteArray.fromBytes (haxe.Resource.getBytes (resourceName));
-				__fromBytes (byteArray);
-				#end
-				
-				#end
-				
-			};
-			
-			var args = [ { name: "width", opt: false, type: macro :Int, value: null }, { name: "height", opt: false, type: macro :Int, value: null }, { name: "transparent", opt: true, type: macro :Bool, value: macro true }, { name: "fillRGBA", opt: true, type: macro :Int, value: macro 0xFFFFFFFF } ];
-			
-			#if html5
-			args.push ({ name: "onload", opt: true, type: macro :Dynamic, value: null });
-			fields.push ({ kind: FVar(macro :lime.graphics.Image, null), name: "preload", doc: null, meta: [], access: [ APublic, AStatic ], pos: Context.currentPos() });
-			#end
-			
-			fields.push ({ name: "new", access: [ APublic ], kind: FFun({ args: args, expr: constructor, params: [], ret: null }), pos: Context.currentPos() });
-			
-		}
-		
-		return fields;
-		
-	}
-	
-	
-	private static function embedData (metaName:String, encode:Bool = false):Array<Field> {
-		
-		var classType = Context.getLocalClass().get();
-		var metaData = classType.meta.get();
-		var position = Context.currentPos();
-		var fields = Context.getBuildFields();
-		
-		for (meta in metaData) {
-			
-			if (meta.name == metaName) {
-				
-				if (meta.params.length > 0) {
-					
-					switch (meta.params[0].expr) {
-						
-						case EConst(CString(filePath)):
-
-							#if lime_console
-							
-							var fieldValue = {
-								pos: position,
-								expr: EConst(CString(filePath))
-							};
-							fields.push ({
-								kind: FVar(macro :String, fieldValue),
-								name: "filePath",
-								access: [ APrivate, AStatic ],
-								pos: position
-							});
-							
-							#else
-							
-							var path = filePath;
-							if (!sys.FileSystem.exists(filePath)) {
-								path = Context.resolvePath (filePath);
-							}
-							var bytes = File.getBytes (path);
-							var resourceName = "__ASSET__" + metaName + "_" + (classType.pack.length > 0 ? classType.pack.join ("_") + "_" : "") + classType.name;
-							
-							if (encode) {
-								
-								var resourceType = "image/png";
-								
-								if (bytes.get (0) == 0xFF && bytes.get (1) == 0xD8) {
-									
-									resourceType = "image/jpg";
-									
-								} else if (bytes.get (0) == 0x47 && bytes.get (1) == 0x49 && bytes.get (2) == 0x46) {
-									
-									resourceType = "image/gif";
-									
-								}
-								
-								var fieldValue = { pos: position, expr: EConst(CString(resourceType)) };
-								fields.push ({ kind: FVar(macro :String, fieldValue), name: "resourceType", access: [ APrivate, AStatic ], pos: position });
-								
-								var base64 = base64Encode (bytes);
-								Context.addResource (resourceName, Bytes.ofString (base64));
-								
-							} else {
-								
-								Context.addResource (resourceName, bytes);
-								
-							}
-							
-							var fieldValue = { pos: position, expr: EConst(CString(resourceName)) };
-							fields.push ({ kind: FVar(macro :String, fieldValue), name: "resourceName", access: [ APrivate, AStatic ], pos: position });
-							
-							#end
-							
-							return fields;
-							
-						default:
-						
-					}
-					
-				}
-				
-			}
-			
-		}
-		
-		return null;
-		
-	}
-	
-	
-	macro public static function embedFile ():Array<Field> {
-		
-		var fields = embedData (":file");
-		
-		if (fields != null) {
-			
-			var constructor = macro { 
-				
-				super();
-				
-				#if lime_console
-				throw "not implemented";
-				#else
-				__fromBytes (haxe.Resource.getBytes (resourceName));
-				#end
-				
-			};
-			
-			var args = [ { name: "size", opt: true, type: macro :Int, value: macro 0 } ];
-			fields.push ({ name: "new", access: [ APublic ], kind: FFun({ args: args, expr: constructor, params: [], ret: null }), pos: Context.currentPos() });
-			
-		}
-		
-		return fields;
-		
-	}
-	
-	
-	macro public static function embedFont ():Array<Field> {
-		
-		var fields = null;
-		
-		var classType = Context.getLocalClass().get();
-		var metaData = classType.meta.get();
-		var position = Context.currentPos();
-		var fields = Context.getBuildFields();
-		
-		var path = "";
-		var glyphs = "32-255";
-		
-		for (meta in metaData) {
-			
-			if (meta.name == ":font") {
-				
-				if (meta.params.length > 0) {
-					
-					switch (meta.params[0].expr) {
-						
-						case EConst(CString(filePath)):
-							
-							path = filePath;
-							if (!sys.FileSystem.exists(filePath)) {
-								path = Context.resolvePath (filePath);
-							}
-							
-						default:
-						
-					}
-					
-				}
-				
-			}
-			
-		}
-		
-		if (path != null && path != "") {
-
-			#if lime_console
-			throw "not implemented";
-			#end
-			
-			#if html5
-			Sys.command ("haxelib", [ "run", "openfl", "generate", "-font-hash", sys.FileSystem.fullPath(path) ]);
-			path += ".hash";
-			#end
-			
-			var bytes = File.getBytes (path);
-			var resourceName = "NME_font_" + (classType.pack.length > 0 ? classType.pack.join ("_") + "_" : "") + classType.name;
-			
-			Context.addResource (resourceName, bytes);
-			
-			var fieldValue = { pos: position, expr: EConst(CString(resourceName)) };
-			fields.push ({ kind: FVar(macro :String, fieldValue), name: "resourceName", access: [ APublic, AStatic ], pos: position });
-			
-			//var constructor = macro { 
-				//
-				//super();
-				//
-				//fontName = resourceName;
-				//
-			//};
-			//
-			//fields.push ({ name: "new", access: [ APublic ], kind: FFun({ args: [], expr: constructor, params: [], ret: null }), pos: Context.currentPos() });
-			
-			return fields;
-			
-		}
-		
-		return fields;
-		
-	}
-	
-	
-	macro public static function embedSound ():Array<Field> {
-		
-		var fields = embedData (":sound");
-		
-		if (fields != null) {
-			
-			#if (!html5) // CFFILoader.h(248) : NOT Implemented:api_buffer_data
-			
-			var constructor = macro { 
-				
-				super();
-				
-				#if lime_console
-				throw "not implemented";
-				#else
-				var byteArray = openfl.utils.ByteArray.fromBytes (haxe.Resource.getBytes (resourceName));
-				loadCompressedDataFromByteArray (byteArray, byteArray.length, forcePlayAsMusic);
-				#end
-
-			};
-			
-			var args = [ { name: "stream", opt: true, type: macro :openfl.net.URLRequest, value: null }, { name: "context", opt: true, type: macro :openfl.media.SoundLoaderContext, value: null }, { name: "forcePlayAsMusic", opt: true, type: macro :Bool, value: macro false } ];
-			fields.push ({ name: "new", access: [ APublic ], kind: FFun({ args: args, expr: constructor, params: [], ret: null }), pos: Context.currentPos() });
-			
-			#end
-			
-		}
-		
-		return fields;
-		
-	}
-	
-	
-}
-
-
-#end

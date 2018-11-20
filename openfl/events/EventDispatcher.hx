@@ -13,271 +13,238 @@ import openfl.events.IEventDispatcher;
 
 
 class EventDispatcher implements IEventDispatcher {
+	
+	
+	private var __eventMap:Map<String, Array<Listener>>;
+	private var __iterators:Map<String, Array<DispatchIterator>>;
+	private var __targetDispatcher:IEventDispatcher;
 
 
-        private var __eventMap:Map<String, Array<Listener>>;
-        private var __iterators:Map<String, Array<DispatchIterator>>;
-        private var __targetDispatcher:IEventDispatcher;
+	public function new (target:IEventDispatcher = null):Void {
 
+		if (target != null) {
 
-        public function new (target:IEventDispatcher = null):Void {
+			__targetDispatcher = target;
 
-                if (target != null) {
+		}
 
-                        __targetDispatcher = target;
+	}
 
-                }
 
-        }
+	public function addEventListener (type:String, listener:Dynamic->Void, useCapture:Bool = false, priority:Int = 0, useWeakReference:Bool = false):Void {
 
+		if (listener == null) return;
 
-        public function addEventListener (type:String, listener:Dynamic->Void, useCapture:Bool = false, priority:Int = 0, useWeakReference:Bool = false):Void {
+		if (__eventMap == null) {
 
-            if (useWeakReference) {
-                throw ("Weak references are not supported by this " +
-                       "implementation of openfl.events.EventDispatcher");
-            }
-            
-                if (listener == null) return;
+			__eventMap = new Map ();
+			__iterators = new Map ();
 
-                if (__eventMap == null) {
+		}
 
-                        __eventMap = new Map ();
-                        __iterators = new Map ();
+		if (!__eventMap.exists (type)) {
 
-                }
+			var list = new Array<Listener> ();
+			list.push (new Listener (listener, useCapture, priority));
 
-                if (!__eventMap.exists (type)) {
+			var iterator = new DispatchIterator (list);
 
-                        var list = new Array<Listener> ();
-                        list.push (new Listener (listener, useCapture, priority));
+			__eventMap.set (type, list);
+			__iterators.set (type, [ iterator ]);
 
-                        var iterator = new DispatchIterator (list);
+		} else {
 
-                        __eventMap.set (type, list);
-                        __iterators.set (type, [ iterator ]);
+			var list = __eventMap.get (type);
 
-                } else {
+			for (i in 0...list.length) {
 
-                        var list = __eventMap.get (type);
+				if (list[i].match (listener, useCapture)) return;
 
-                        for (i in 0...list.length) {
+			}
 
-                                if (list[i].match (listener, useCapture)) return;
+			var iterators = __iterators.get (type);
 
-                        }
+			for (iterator in iterators) {
 
-                        var iterators = __iterators.get (type);
+				if (iterator.active) {
 
-                        for (iterator in iterators) {
+					iterator.copy ();
 
-                                if (iterator.active) {
+				}
 
-                                        iterator.copy ();
+			}
 
-                                }
+			list.push (new Listener (listener, useCapture, priority));
+			list.sort (__sortByPriority);
 
-                        }
+		}
 
-                        __addListenerByPriority(list, new Listener (listener, useCapture, priority));
+	}
 
-                }
 
-        }
+	public function dispatchEvent (event:Event):Bool {
 
+		if (__targetDispatcher != null) {
 
-        public function dispatchEvent (event:Event):Bool {
+			event.target = __targetDispatcher;
 
-                if (__targetDispatcher != null) {
+		} else {
 
-                        event.target = __targetDispatcher;
+			event.target = this;
 
-                } else {
+		}
 
-                        event.target = this;
+		return __dispatchEvent (event);
 
-                }
+	}
 
-                return __dispatchEvent (event);
 
-        }
+	public function hasEventListener (type:String):Bool {
 
+		if (__eventMap == null) return false;
 
-        public function hasEventListener (type:String):Bool {
+		return __eventMap.exists (type);
 
-                if (__eventMap == null) return false;
+	}
 
-                return __eventMap.exists (type);
 
-        }
+	public function removeEventListener (type:String, listener:Dynamic->Void, useCapture:Bool = false):Void {
 
+		if (__eventMap == null || listener == null) return;
 
-        public function removeEventListener (type:String, listener:Dynamic->Void, useCapture:Bool = false):Void {
+		var list = __eventMap.get (type);
+		if (list == null) return;
 
-                if (__eventMap == null || listener == null) return;
+		var iterators = __iterators.get (type);
 
-                var list = __eventMap.get (type);
-                if (list == null) return;
+		for (i in 0...list.length) {
 
-                var iterators = __iterators.get (type);
+			if (list[i].match (listener, useCapture)) {
 
-                for (i in 0...list.length) {
+				for (iterator in iterators) {
 
-                        if (list[i].match (listener, useCapture)) {
+					iterator.remove (list[i], i);
 
-                                for (iterator in iterators) {
+				}
 
-                                        iterator.remove (list[i], i);
+				list.splice (i, 1);
+				break;
 
-                                }
+			}
 
-                                list.splice (i, 1);
-                                break;
+		}
 
-                        }
+		if (list.length == 0) {
 
-                }
+			__eventMap.remove (type);
+			__iterators.remove (type);
 
-                if (list.length == 0) {
+		}
 
-                        __eventMap.remove (type);
-                        __iterators.remove (type);
+		if (!__eventMap.iterator ().hasNext ()) {
 
-                }
+			__eventMap = null;
+			__iterators = null;
 
-                if (!__eventMap.iterator ().hasNext ()) {
+		}
 
-                        __eventMap = null;
-                        __iterators = null;
+	}
 
-                }
 
-        }
+	public function toString ():String {
 
+		var full = Type.getClassName (Type.getClass (this));
+		var short = full.split (".").pop ();
 
-        public function toString ():String {
+		return untyped "[object " + short + "]";
 
-                var full = Type.getClassName (Type.getClass (this));
-                var short = full.split (".").pop ();
+	}
 
-                return untyped "[object " + short + "]";
 
-        }
+	public function willTrigger (type:String):Bool {
 
+		return hasEventListener (type);
 
-        public function willTrigger (type:String):Bool {
+	}
 
-                return hasEventListener (type);
 
-        }
+	private function __dispatchEvent (event:Event):Bool {
 
+		if (__eventMap == null || event == null) return true;
 
-        private function __dispatchEvent (event:Event):Bool {
+		var type = event.type;
 
-                if (__eventMap == null || event == null) return true;
+		var list = __eventMap.get (type);
+		if (list == null) return true;
 
-                var type = event.type;
+		if (event.target == null) {
 
-                var list = __eventMap.get (type);
-                if (list == null) return true;
+			if (__targetDispatcher != null) {
 
-                if (event.target == null) {
+				event.target = __targetDispatcher;
 
-                        if (__targetDispatcher != null) {
+			} else {
 
-                                event.target = __targetDispatcher;
+				event.target = this;
 
-                        } else {
+			}
 
-                                event.target = this;
+		}
 
-                        }
+		event.currentTarget = this;
 
-                }
+		var capture = (event.eventPhase == EventPhase.CAPTURING_PHASE);
+		var index = 0;
 
-                event.currentTarget = this;
+		var iterators = __iterators.get (type);
+		var iterator = iterators[0];
 
-                var capture = (event.eventPhase == EventPhase.CAPTURING_PHASE);
-                var index = 0;
+		if (iterator.active) {
 
-                var iterators = __iterators.get (type);
-                var iterator = iterators[0];
+			iterator = new DispatchIterator (list);
+			iterators.push (iterator);
 
-                if (iterator.active) {
+		}
 
-                        iterator = new DispatchIterator (list);
-                        iterators.push (iterator);
+		iterator.reset (list);
 
-                }
+		for (listener in iterator) {
 
-                iterator.start();
+			if (listener == null) continue;
 
-                for (listener in iterator) {
+			if (listener.useCapture == capture) {
 
-                        if (listener == null) continue;
+				//listener.callback (event.clone ());
+				listener.callback (event);
 
-                        if (listener.useCapture == capture) {
+				if (event.__isCanceledNow) {
 
-                                //listener.callback (event.clone ());
-                                listener.callback (event);
+					break;
 
-                                if (event.__isCanceledNow) {
+				}
 
-                                        break;
+			}
 
-                                }
+		}
 
-                        }
+		if (iterator != iterators[0]) {
 
-                }
+			iterators.remove (iterator);
 
-                iterator.stop();
-
-                if (iterator != iterators[0]) {
-
-                        iterators.remove (iterator);
-
-                }
-                else
-                {
-                        iterator.reset (list);
-                }
-
-                return !event.isDefaultPrevented();
-
-        }
-
-
-        private function __removeAllListeners ():Void {
-
-                __eventMap = null;
-                __iterators = null;
-
-        }
-
-
-        private function __addListenerByPriority(list: Array<Listener>, listener: Listener): Void {
-
-                var numElements: Int = list.length;
-                var addAtPosition: Int = numElements;
-
-                for (i in 0...numElements) {
-
-                        if (list[i].priority < listener.priority) {
-
-                                addAtPosition = i;
-
-                                break;
-
-                        }
-
-                }
-
-                list.insert(addAtPosition, listener);
-
-        }
-
-
+		}
+		
+		return true;
+		
+	}
+	
+	
+	private static function __sortByPriority (l1:Listener, l2:Listener):Int {
+		
+		return l1.priority == l2.priority ? 0 : (l1.priority > l2.priority ? -1 : 1);
+		
+	}
+	
+	
 }
 
 
@@ -290,107 +257,99 @@ class EventDispatcher implements IEventDispatcher {
 @:dox(hide) private class DispatchIterator {
 
 
-        public var active:Bool;
-        public var index (default, null):Int;
+	public var active:Bool;
+	public var index (default, null):Int;
 
-        private var isCopy:Bool;
-        private var list:Array<Listener>;
-
-
-        public function new (list:Array<Listener>) {
-                active = false;
-                reset(list);
-        }
+	private var isCopy:Bool;
+	private var list:Array<Listener>;
 
 
-        public function copy ():Void {
+	public function new (list:Array<Listener>) {
 
-                if (!isCopy) {
+		this.list = list;
+		index = list.length;
 
-                        list = list.copy ();
-                        isCopy = true;
-
-                }
-
-        }
+	}
 
 
-        public function hasNext ():Bool {
+	public function copy ():Void {
 
-                return index < list.length;
-        }
+		if (index < list.length && !isCopy) {
 
+			list = list.copy ();
+			isCopy = true;
 
-        public function next ():Listener {
+		}
 
-                return list[index++];
-
-        }
-
-
-        public function remove (listener:Listener, listIndex:Int):Void {
-
-                if (active) {
-
-                        if (!isCopy) {
-
-                                if (listIndex < index) {
-
-                                        index--;
-
-                                }
-
-                        } else {
-
-                                for (i in index...list.length) {
-
-                                        if (list[i] == listener) {
-
-                                                list.splice (i, 1);
-                                                break;
-
-                                        }
-
-                                }
-
-                        }
-
-                }
-
-        }
+	}
 
 
-        public function reset (list:Array<Listener>):Void {
+	public function hasNext ():Bool {
 
-                this.list = list;
+		if (index < list.length) {
 
-                isCopy = false;
-                index = 0;
+			return true;
 
-        }
+		} else {
+
+			active = false;
+			return false;
+
+		}
+
+	}
 
 
-        public function start ():Void {
+	public function next ():Listener {
 
-                active = true;
+		return list[index++];
 
-        }
+	}
 
 
-        public function stop ():Void {
+	public function remove (listener:Listener, listIndex:Int):Void {
 
-                active = false;
+		if (active) {
 
-        }
+			if (!isCopy) {
+
+				if (listIndex < index) {
+
+					index--;
+
+				}
+
+			} else {
+
+				for (i in index...list.length) {
+
+					if (list[i] == listener) {
+
+						list.splice (i, 1);
+						break;
+
+					}
+
+				}
+
+			}
+
+		}
+
+	}
+
+
+	public function reset (list:Array<Listener>):Void {
+
+		this.list = list;
+
+		active = true;
+		index = 0;
+
+	}
 
 
 }
-
-
-#if !openfl_debug
-@:fileXml('tags="haxe,release"')
-@:noDebug
-#end
 
 
 private class Listener {

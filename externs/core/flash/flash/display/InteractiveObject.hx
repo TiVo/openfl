@@ -8,15 +8,15 @@ extern class InteractiveObject extends DisplayObject {
 	
 	
 	#if flash
-	@:noCompletion @:dox(hide) public var accessibilityImplementation:flash.accessibility.AccessibilityImplementation;
+	public var accessibilityImplementation:flash.accessibility.AccessibilityImplementation;
 	#end
 	
 	#if flash
-	@:noCompletion @:dox(hide) public var contextMenu:flash.ui.ContextMenu;
+	public var contextMenu:flash.ui.ContextMenu;
 	#end
 	
 	public var doubleClickEnabled:Bool;
-	public var focusRect:Dynamic;
+	public var focusRect:Null<Bool>;
 	public var mouseEnabled:Bool;
 	@:require(flash11) public var needsSoftKeyboard:Bool;
 	@:require(flash11) public var softKeyboardInputAreaOfInterest:Rectangle;

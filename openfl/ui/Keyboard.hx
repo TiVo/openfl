@@ -3,6 +3,11 @@ package openfl.ui;
 
 import lime.ui.KeyCode;
 
+#if !openfl_debug
+@:fileXml('tags="haxe,release"')
+@:noDebug
+#end
+
 
 /**
  * TiVo - work around the fact that lime defines a KeyCode class that we also

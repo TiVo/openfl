@@ -113,9 +113,7 @@ extern class Event {
 	@:noCompletion @:dox(hide) public static var CHANNEL_STATE:String;
 	#end
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash10) public static var CLEAR:String;
-	#end
+	public static inline var CLEAR = "clear";
 	
 	/**
 	 * The <code>Event.CLOSE</code> constant defines the value of the
@@ -143,13 +141,9 @@ extern class Event {
 	
 	public static inline var CONTEXT3D_CREATE = "context3DCreate";
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash10) public static var COPY:String;
-	#end
+	public static inline var COPY = "copy";
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash10) public static var CUT:String;
-	#end
+	public static inline var CUT = "cut";
 	
 	/**
 	 * The <code>Event.DEACTIVATE</code> constant defines the value of the
@@ -178,25 +172,17 @@ extern class Event {
 	 */
 	public static inline var ENTER_FRAME = "enterFrame";
 	
-	#if air
+	#if (flash && air)
 	public static var EXITING : String;
 	#end
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash10) public static var EXIT_FRAME:String;
-	#end
+	public static inline var EXIT_FRAME = "exitFrame";
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash10) public static var FRAME_CONSTRUCTED:String;
-	#end
+	public static inline var FRAME_CONSTRUCTED = "frameConstructed";
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash11_3) public static var FRAME_LABEL:String;
-	#end
+	public static inline var FRAME_LABEL = "frameLabel";
 	
-	#if flash
-	@:noCompletion @:dox(hide) public static var FULLSCREEN:String;
-	#end
+	public static inline var FULLSCREEN = "fullScreen";
 	
 	/**
 	 * The <code>Event.ID3</code> constant defines the value of the
@@ -230,9 +216,7 @@ extern class Event {
 	 */
 	public static inline var OPEN = "open";
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash10) public static var PASTE:String;
-	#end
+	public static inline var PASTE = "paste";
 	
 	/**
 	 * The <code>Event.REMOVED</code> constant defines the value of the
@@ -287,9 +271,7 @@ extern class Event {
 	 */
 	public static inline var SELECT = "select";
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash10) public static var SELECT_ALL:String;
-	#end
+	public static inline var SELECT_ALL = "selectAll";
 	
 	/**
 	 * The <code>Event.SOUND_COMPLETE</code> constant defines the value of the
@@ -299,7 +281,7 @@ extern class Event {
 	 */
 	public static inline var SOUND_COMPLETE = "soundComplete";
 	
-	#if flash
+	#if (flash && air)
 	@:noCompletion @:dox(hide) @:require(flash11_3) public static var SUSPEND:String;
 	#end
 	
@@ -329,9 +311,7 @@ extern class Event {
 	 */
 	public static inline var TAB_INDEX_CHANGE = "tabIndexChange";
 	
-	#if flash
-	@:noCompletion @:dox(hide) @:require(flash11_3) public static var TEXTURE_READY:String;
-	#end
+	public static inline var TEXTURE_READY = "textureReady";
 	
 	#if flash
 	@:noCompletion @:dox(hide) @:require(flash11) public static var TEXT_INTERACTION_MODE_CHANGE:String;
@@ -384,7 +364,7 @@ extern class Event {
 	 * could be the node containing that button or one of its ancestors that has
 	 * registered an event listener for that event.
 	 */
-	public var currentTarget (default, null):Dynamic;
+	public var currentTarget (default, null):IEventDispatcher;
 	
 	/**
 	 * The current phase in the event flow. This property can contain the
@@ -402,7 +382,7 @@ extern class Event {
 	 * a user clicks an OK button, the target node is the display list node
 	 * containing that button.
 	 */
-	public var target (default, null):Dynamic;
+	public var target (default, null):IEventDispatcher;
 	
 	/**
 	 * The type of event. The type is case-sensitive.

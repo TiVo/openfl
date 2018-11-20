@@ -9,16 +9,12 @@ extern class Sprite extends DisplayObjectContainer {
 	
 	
 	public var buttonMode:Bool;
-	
-	#if flash
-	@:noCompletion @:dox(hide) public var dropTarget (default, null):DisplayObject;
-	#end
-	
+	public var dropTarget (default, null):DisplayObject;
 	public var graphics (default, null):Graphics;
 	public var hitArea:Sprite;
 	
 	#if flash
-	@:noCompletion @:dox(hide) public var soundTransform:SoundTransform;
+	public var soundTransform:SoundTransform;
 	#end
 	
 	public var useHandCursor:Bool;
@@ -27,13 +23,13 @@ extern class Sprite extends DisplayObjectContainer {
 	public function startDrag (lockCenter:Bool = false, bounds:Rectangle = null):Void;
 	
 	#if flash
-	@:noCompletion @:dox(hide) public function startTouchDrag (touchPointID:Int, lockCenter:Bool = false, bounds:Rectangle = null):Void;
+	public function startTouchDrag (touchPointID:Int, lockCenter:Bool = false, bounds:Rectangle = null):Void;
 	#end
 	
 	public function stopDrag ():Void;
 	
 	#if flash
-	@:noCompletion @:dox(hide) public function stopTouchDrag (touchPointID:Int):Void;
+	public function stopTouchDrag (touchPointID:Int):Void;
 	#end
 	
 	

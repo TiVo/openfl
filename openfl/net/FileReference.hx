@@ -113,7 +113,7 @@ class FileReference extends EventDispatcher {
 		
 		if (__path != null) {
 			
-			data = Bytes.readFile (__path);
+			data = Bytes.fromFile (__path);
 			openFileDialog_onComplete();
 			
 		}
@@ -155,7 +155,7 @@ class FileReference extends EventDispatcher {
 	
 	public function upload (request:URLRequest, uploadDataFieldName:String = "Filedata", testUpload:Bool = false):Void {
 		
-		openfl.Lib.notImplemented ("FileReference.upload");
+		openfl.Lib.notImplemented ();
 		
 	}
 	

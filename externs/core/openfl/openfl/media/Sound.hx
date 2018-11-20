@@ -1,7 +1,7 @@
 package openfl.media; #if (display || !flash)
 
 
-import lime.audio.AudioBuffer;
+import lime.media.AudioBuffer;
 import openfl.events.EventDispatcher;
 import openfl.net.URLRequest;
 import openfl.utils.ByteArray;
@@ -125,7 +125,7 @@ extern class Sound extends EventDispatcher {
 	 * href="http://www.adobe.com/go/devnet_security_en"
 	 * scope="external">Security</a>.</p>
 	 */
-	public var id3 (get, null):ID3Info;
+	public var id3 (get, never):ID3Info;
 	
 	/**
 	 * Returns the buffering state of external MP3 files. If the value is

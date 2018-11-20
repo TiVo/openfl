@@ -3,103 +3,99 @@ package openfl.display;
 
 import lime.graphics.GLRenderContext;
 import lime.graphics.opengl.GLProgram;
+import lime.utils.Float32Array;
 import lime.utils.GLUtils;
 import openfl.utils.ByteArray;
 
 @:access(openfl.display.ShaderInput)
 @:access(openfl.display.ShaderParameter)
 
+#if (!display && !macro)
+@:autoBuild(openfl._internal.macros.ShaderMacro.build())
+@:build(openfl._internal.macros.ShaderMacro.build())
+#end
+
 
 class Shader {
 	
 	
 	public var byteCode (null, default):ByteArray;
-	public var data:ShaderData;
-	public var glFragmentSource:String;
-	public var glProgram:GLProgram;
-	public var glVertexSource:String;
+	public var data (get, set):ShaderData;
+	public var glFragmentSource (get, set):String;
+	public var glProgram (default, null):GLProgram;
+	public var glVertexSource (get, set):String;
 	public var precisionHint:ShaderPrecision;
 	
 	private var gl:GLRenderContext;
 	
-	
-	public function new (code:ByteArray = null) {
+	private var __data:ShaderData;
+	private var __glFragmentSource:String;
+	private var __glSourceDirty:Bool;
+	private var __glVertexSource:String;
+	private var __isUniform:Map<String, Bool>;
+	private var __inputBitmapData:Array<ShaderInput<BitmapData>>;
+	private var __numPasses:Int;
+	private var __paramBool:Array<ShaderParameter<Bool>>;
+	private var __paramFloat:Array<ShaderParameter<Float>>;
+	private var __paramInt:Array<ShaderParameter<Int>>;
+	private var __uniformMatrix2:Float32Array;
+	private var __uniformMatrix3:Float32Array;
+	private var __uniformMatrix4:Float32Array;
+
+
+	@:glFragmentSource(
 		
+		"varying float vAlpha;
+		varying vec2 vTexCoord;
+		uniform sampler2D uImage0;
+
+		void main(void) {
+
+			vec4 color = texture2D (uImage0, vTexCoord);
+
+			if (color.a == 0.0) {
+
+				gl_FragColor = vec4 (0.0, 0.0, 0.0, 0.0);
+
+			} else {
+
+				gl_FragColor = color * vAlpha;
+
+			}
+
+		}"
+
+	)
+
+
+	@:glVertexSource(
+
+		"attribute float aAlpha;
+		attribute vec4 aPosition;
+		attribute vec2 aTexCoord;
+		varying float vAlpha;
+		varying vec2 vTexCoord;
+
+		uniform mat4 uMatrix;
+
+		void main(void) {
+
+			vAlpha = aAlpha;
+			vTexCoord = aTexCoord;
+			gl_Position = uMatrix * aPosition;
+
+		}"
+
+	)
+
+
+	public function new (code:ByteArray = null) {
+
 		byteCode = code;
 		precisionHint = FULL;
-		
-		glVertexSource =
-			
-			"attribute vec4 aPosition;
-			attribute vec2 aTexCoord;
-			varying vec2 vTexCoord;
-			
-			uniform mat4 uMatrix;
-			
-			void main(void) {
-				
-				vTexCoord = aTexCoord;
-				gl_Position = uMatrix * aPosition;
-				
-			}";
 
-
-        // uMaskType 0 == no mask
-        // uMaskType 1 == mask
-        // uMaskType 2 == alpha mask
-		glFragmentSource = 
-			
-            "varying vec2 vTexCoord;
-            uniform sampler2D uImage0;
-            uniform sampler2D uMask1;
-            uniform int uMaskType;
-            uniform vec2 uMaskScale;
-            uniform vec2 uMaskOffset;
-            uniform float uMaskOutside;
-            uniform float uAlpha;
-            
-            void main(void) {
-                
-                vec4 color = texture2D (uImage0, vTexCoord);
-
-                if (color.a == 0.0) {
-                    
-                    gl_FragColor = vec4 (0.0, 0.0, 0.0, 0.0);
-                    
-                } else if (uMaskType == 0) {
-                    
-                    gl_FragColor = color * uAlpha;
-                    
-                } else {
-
-                    vec2 mask_xy = (vTexCoord * uMaskScale) + uMaskOffset;
-
-                    if ((mask_xy.x < 0.0) || (mask_xy.x > 1.0) ||
-                        (mask_xy.y < 0.0) || (mask_xy.y > 1.0)) {
-
-                        gl_FragColor = color * uMaskOutside * uAlpha;
-
-                    } else {
-
-                        vec4 mask_color = texture2D (uMask1, mask_xy);
-    
-                        if (uMaskType == 1) {
-    
-                            gl_FragColor = color * sign(length(mask_color)) * uAlpha;
-    
-                        } else {
-    
-                            gl_FragColor = color * mask_color.a * uAlpha;
-        
-                        }
-    
-                    } 
-
-                }
-                
-            }";
-        
-		__init ();
+		__glSourceDirty = true;
+		__numPasses = 1;
 		
 	}
 	
@@ -108,38 +104,45 @@ class Shader {
 		
 		if (glProgram != null) {
 			
-			var value, parameter:ShaderParameter;
-			
-			for (field in Reflect.fields (data)) {
-				
-				value = Reflect.field (data, field);
-				
-				if (Std.is (value, ShaderParameter)) {
-					
-					parameter = cast value;
-					
-					switch (parameter.type) {
-						
-						case BOOL2, BOOL3, BOOL4, INT2, INT3, INT4, FLOAT2, FLOAT3, FLOAT4:
-							
-							gl.disableVertexAttribArray (parameter.index);
-						
-						default:
-						
-					}
-					
-				}
-				
-			}
-			
-			gl.bindBuffer (gl.ARRAY_BUFFER, null);
-			gl.bindTexture (gl.TEXTURE_2D, null);
-			
-			#if desktop
-			gl.disable (gl.TEXTURE_2D);
-			#end
+			__disableGL ();
 			
 		}
+
+	}
+
+
+	private function __disableGL ():Void {
+
+		if (data.uImage0 != null) {
+
+			data.uImage0.input = null;
+
+		}
+
+		for (parameter in __paramBool) {
+
+			gl.disableVertexAttribArray (parameter.index);
+
+		}
+
+		for (parameter in __paramFloat) {
+
+			gl.disableVertexAttribArray (parameter.index);
+
+		}
+
+		for (parameter in __paramInt) {
+
+			gl.disableVertexAttribArray (parameter.index);
+
+		}
+
+		gl.bindBuffer (gl.ARRAY_BUFFER, null);
+		gl.bindTexture (gl.TEXTURE_2D, null);
+
+		#if desktop
+		gl.disable (gl.TEXTURE_2D);
+		#end
 		
 	}
 	
@@ -150,60 +153,77 @@ class Shader {
 		
 		if (glProgram != null) {
 			
-			var parameter:ShaderParameter, value;
-			var textureCount = 0;
-			
-			for (field in Reflect.fields (data)) {
-				
-				value = Reflect.field (data, field);
-				
-				if (Std.is (value, ShaderInput)) {
-					
-					gl.uniform1i (value.index, textureCount);
-					textureCount++;
-					
-				} else {
-					
-					parameter = cast value;
-					
-					switch (parameter.type) {
-						
-						case BOOL2, BOOL3, BOOL4, INT2, INT3, INT4, FLOAT2, FLOAT3, FLOAT4:
-							
-							gl.enableVertexAttribArray (parameter.index);
-						
-						default:
-						
-					}
-					
-				}
-				
-			}
-			
-			if (textureCount > 0) {
-				
-				gl.activeTexture (gl.TEXTURE0);
-				
-				#if desktop
-				gl.enable (gl.TEXTURE_2D);
-				#end
-				
-			}
-			
+			__enableGL ();
+
 		}
+
+	}
+
+
+	private function __enableGL ():Void {
+
+		var textureCount = 0;
+
+		for (input in __inputBitmapData) {
+
+			gl.uniform1i (input.index, textureCount);
+			textureCount++;
+
+		}
+
+		#if desktop
+		if (textureCount > 0) {
+
+			gl.enable (gl.TEXTURE_2D);
+
+		}
+		#end
 		
 	}
 	
 	
 	private function __init ():Void {
 		
-		if (data == null) {
+		if (__data == null) {
 			
-			data = new ShaderData (null);
+			__data = cast new ShaderData (null);
 			
 		}
 		
-		if (gl != null && glProgram == null && glFragmentSource != null && glVertexSource != null) {
+		if (__glFragmentSource != null && __glVertexSource != null && (glProgram == null || __glSourceDirty)) {
+
+			__initGL ();
+
+		}
+
+	}
+
+
+	private function __initGL ():Void {
+
+		if (__glSourceDirty || __isUniform == null) {
+
+			__glSourceDirty = false;
+			glProgram = null;
+
+			__isUniform = new Map ();
+
+			__inputBitmapData = new Array ();
+			__paramBool = new Array ();
+			__paramFloat = new Array ();
+			__paramInt = new Array ();
+
+			__uniformMatrix2 = new Float32Array (4);
+			__uniformMatrix3 = new Float32Array (9);
+			__uniformMatrix4 = new Float32Array (16);
+
+			__processGLData (glVertexSource, "attribute");
+			__processGLData (glVertexSource, "uniform");
+			__processGLData (glFragmentSource, "uniform");
+
+		}
+
+		if (gl != null && glProgram == null) {
 			
 			var fragment = 
 				
@@ -216,9 +236,61 @@ class Shader {
 			
 			if (glProgram != null) {
 				
-				__processGLData (glVertexSource, "attribute");
-				__processGLData (glVertexSource, "uniform");
-				__processGLData (glFragmentSource, "uniform");
+				for (input in __inputBitmapData) {
+
+					if (__isUniform.get (input.name)) {
+
+						input.index = gl.getUniformLocation (glProgram, input.name);
+
+					} else {
+
+						input.index = gl.getAttribLocation (glProgram, input.name);
+
+					}
+
+				}
+
+				for (parameter in __paramBool) {
+
+					if (__isUniform.get (parameter.name)) {
+
+						parameter.index = gl.getUniformLocation (glProgram, parameter.name);
+
+					} else {
+
+						parameter.index = gl.getAttribLocation (glProgram, parameter.name);
+
+					}
+
+				}
+
+				for (parameter in __paramFloat) {
+
+					if (__isUniform.get (parameter.name)) {
+
+						parameter.index = gl.getUniformLocation (glProgram, parameter.name);
+
+					} else {
+
+						parameter.index = gl.getAttribLocation (glProgram, parameter.name);
+
+					}
+
+				}
+
+				for (parameter in __paramInt) {
+
+					if (__isUniform.get (parameter.name)) {
+
+						parameter.index = gl.getUniformLocation (glProgram, parameter.name);
+
+					} else {
+
+						parameter.index = gl.getAttribLocation (glProgram, parameter.name);
+
+					}
+
+				}
 				
 			}
 			
@@ -248,25 +320,14 @@ class Shader {
 			
 			if (StringTools.startsWith (type, "sampler")) {
 				
-				var input = new ShaderInput ();
-				
-				if (storageType == "uniform") {
-					
-					input.index = gl.getUniformLocation (glProgram, name);
-					
-				} else {
-					
-					input.index = gl.getAttribLocation (glProgram, name);
-					
-				}
-				
+				var input = new ShaderInput<BitmapData> ();
+				input.name = name;
+				__inputBitmapData.push (input);
 				Reflect.setField (data, name, input);
 				
 			} else {
 				
-				var parameter = new ShaderParameter ();
-				
-				parameter.type = switch (type) {
+				var parameterType:ShaderParameterType = switch (type) {
 					
 					case "bool": BOOL;
 					case "double", "float": FLOAT;
@@ -293,20 +354,38 @@ class Shader {
 					
 				}
 				
-				if (storageType == "uniform") {
+				switch (parameterType) {
 					
-					parameter.index = gl.getUniformLocation (glProgram, name);
-					
-				} else {
-					
-					parameter.index = gl.getAttribLocation (glProgram, name);
-					
+					case BOOL, BOOL2, BOOL3, BOOL4:
+
+						var parameter = new ShaderParameter<Bool> ();
+						parameter.name = name;
+						parameter.type = parameterType;
+						__paramBool.push (parameter);
+						Reflect.setField (data, name, parameter);
+
+					case INT, INT2, INT3, INT4:
+
+						var parameter = new ShaderParameter<Int> ();
+						parameter.name = name;
+						parameter.type = parameterType;
+						__paramInt.push (parameter);
+						Reflect.setField (data, name, parameter);
+
+					default:
+
+						var parameter = new ShaderParameter<Float> ();
+						parameter.name = name;
+						parameter.type = parameterType;
+						__paramFloat.push (parameter);
+						Reflect.setField (data, name, parameter);
+
 				}
 				
-				Reflect.setField (data, name, parameter);
-				
 			}
-			
+
+			__isUniform.set (name, storageType == "uniform");
+
 			position = regex.matchedPos ();
 			lastMatch = position.pos + position.len;
 			
@@ -315,4 +394,264 @@ class Shader {
 	}
 	
 	
+	private function __update ():Void {
+
+		if (glProgram != null) {
+
+			__updateGL ();
+
+		}
+
+	}
+
+
+	private function __updateGL ():Void {
+
+		var textureCount = 0;
+
+		for (input in __inputBitmapData) {
+
+			if (input.input != null) {
+
+				gl.activeTexture (gl.TEXTURE0 + textureCount);
+				gl.bindTexture (gl.TEXTURE_2D, input.input.getTexture (gl));
+
+				if (input.smoothing) {
+
+					gl.texParameteri (gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+					gl.texParameteri (gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+				} else {
+
+					gl.texParameteri (gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+					gl.texParameteri (gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
+				}
+
+			}
+
+			textureCount++;
+
+		}
+
+		var index:Dynamic = 0;
+
+		for (parameter in __paramBool) {
+
+			var value = parameter.value;
+			index = parameter.index;
+
+			if (value != null) {
+
+				switch (parameter.type) {
+
+					case BOOL:
+
+						gl.uniform1i (index, value[0] ? 1 : 0);
+
+					case BOOL2:
+
+						gl.uniform2i (index, value[0] ? 1 : 0, value[1] ? 1 : 0);
+
+					case BOOL3:
+
+						gl.uniform3i (index, value[0] ? 1 : 0, value[1] ? 1 : 0, value[2] ? 1 : 0);
+
+					case BOOL4:
+
+						gl.uniform4i (index, value[0] ? 1 : 0, value[1] ? 1 : 0, value[2] ? 1 : 0, value[3] ? 1 : 0);
+
+					default:
+
+				}
+
+			} else if (!__isUniform.get (parameter.name)) {
+
+				gl.enableVertexAttribArray (parameter.index);
+
+			}
+
+		}
+
+		for (parameter in __paramFloat) {
+
+			var value = parameter.value;
+			index = parameter.index;
+
+			if (value != null) {
+
+				switch (parameter.type) {
+
+					case FLOAT:
+
+						gl.uniform1f (index, value[0]);
+
+					case FLOAT2:
+
+						gl.uniform2f (index, value[0], value[1]);
+
+					case FLOAT3:
+
+						gl.uniform3f (index, value[0], value[1], value[2]);
+
+					case FLOAT4:
+
+						gl.uniform4f (index, value[0], value[1], value[2], value[3]);
+
+					case MATRIX2X2:
+
+						for (i in 0...4) {
+
+							__uniformMatrix2[i] = value[i];
+
+						}
+
+						gl.uniformMatrix2fv (index, false, __uniformMatrix2);
+
+					//case MATRIX2X3:
+					//case MATRIX2X4:
+					//case MATRIX3X2:
+
+					case MATRIX3X3:
+
+						for (i in 0...9) {
+
+							__uniformMatrix3[i] = value[i];
+
+						}
+
+						gl.uniformMatrix3fv (index, false, __uniformMatrix3);
+
+					//case MATRIX3X4:
+					//case MATRIX4X2:
+					//case MATRIX4X3:
+
+					case MATRIX4X4:
+
+						for (i in 0...16) {
+
+							__uniformMatrix4[i] = value[i];
+
+						}
+
+						gl.uniformMatrix4fv (index, false, __uniformMatrix4);
+
+					default:
+
+				}
+
+			} else if (!__isUniform.get (parameter.name)) {
+
+				gl.enableVertexAttribArray (parameter.index);
+
+			}
+
+		}
+
+		for (parameter in __paramInt) {
+
+			var value = parameter.value;
+
+			if (value != null) {
+
+				switch (parameter.type) {
+
+					case INT:
+
+						gl.uniform1i (index, value[0]);
+
+					case INT2:
+
+						gl.uniform2i (index, value[0], value[1]);
+
+					case INT3:
+
+						gl.uniform3i (index, value[0], value[1], value[2]);
+
+					case INT4:
+
+						gl.uniform4i (index, value[0], value[1], value[2], value[3]);
+
+					default:
+
+				}
+
+			} else if (!__isUniform.get (parameter.name)) {
+
+				gl.enableVertexAttribArray (parameter.index);
+
+			}
+
+		}
+
+	}
+
+
+
+
+	// Get & Set Methods
+
+
+
+
+	private function get_data ():ShaderData {
+
+		if (__glSourceDirty || __data == null) {
+
+			__init ();
+
+		}
+
+		return __data;
+
+	}
+
+
+	private function set_data (value:ShaderData):ShaderData {
+
+		return __data = cast value;
+
+	}
+
+
+	private function get_glFragmentSource ():String {
+
+		return __glFragmentSource;
+
+	}
+
+
+	private function set_glFragmentSource (value:String):String {
+
+		if (value != __glFragmentSource) {
+
+			__glSourceDirty = true;
+
+		}
+
+		return __glFragmentSource = value;
+
+	}
+
+
+	private function get_glVertexSource ():String {
+
+		return __glVertexSource;
+
+	}
+
+
+	private function set_glVertexSource (value:String):String {
+
+		if (value != __glFragmentSource) {
+
+			__glSourceDirty = true;
+
+		}
+
+		return __glFragmentSource = value;
+
+	}
+
+
 }

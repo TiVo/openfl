@@ -4,11 +4,15 @@ package openfl._internal.renderer.canvas;
 import lime.graphics.utils.ImageCanvasUtil;
 import openfl._internal.renderer.RenderSession;
 import openfl.display.Tilemap;
+import openfl.geom.Matrix;
+import openfl.geom.Rectangle;
 
+@:access(lime.graphics.ImageBuffer)
 @:access(openfl.display.BitmapData)
 @:access(openfl.display.Tilemap)
-@:access(openfl.display.TilemapLayer)
 @:access(openfl.display.Tileset)
+@:access(openfl.geom.Matrix)
+@:access(openfl.geom.Rectangle)
 
 
 class CanvasTilemap {
@@ -18,26 +22,20 @@ class CanvasTilemap {
 		
 		#if (js && html5)
 		
-		if (!tilemap.__renderable || tilemap.__worldAlpha <= 0) return;
+		if (!tilemap.__renderable || tilemap.__tiles.length == 0 || tilemap.__worldAlpha <= 0) return;
 		
 		var context = renderSession.context;
 		
 		renderSession.maskManager.pushObject (tilemap);
 		
-		context.globalAlpha = tilemap.__worldAlpha;
-		var transform = tilemap.__worldTransform;
+		var rect = Rectangle.__temp;
+		rect.setTo (0, 0, tilemap.__width, tilemap.__height);
+		renderSession.maskManager.pushRect (rect, tilemap.__renderTransform);
 		
-		if (renderSession.roundPixels) {
-			
-			context.setTransform (transform.a, transform.b, transform.c, transform.d, Std.int (transform.tx), Std.int (transform.ty));
-			
-		} else {
-			
-			context.setTransform (transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty);
-			
-		}
+		var transform = tilemap.__renderTransform;
+		var roundPixels = renderSession.roundPixels;
 		
-		if (!tilemap.smoothing) {
+		if (!renderSession.allowSmoothing || !tilemap.smoothing) {
 			
 			untyped (context).mozImageSmoothingEnabled = false;
 			//untyped (context).webkitImageSmoothingEnabled = false;
@@ -46,40 +44,71 @@ class CanvasTilemap {
 			
 		}
 		
-		var tileRect = null;
-		var cacheTileID = -1;
+		var defaultTileset = tilemap.tileset;
+		var cacheBitmapData = null;
+		var source = null;
 		
-		var tiles, count, tile, source, rects;
+		var tiles, count, tile, alpha, visible, tileset, tileData, bitmapData;
 		
-		for (layer in tilemap.__layers) {
+		tiles = tilemap.__tiles;
+		count = tiles.length;
+		
+		var tileTransform = Matrix.__temp;
+		
+		for (i in 0...count) {
 			
-			if (layer.__tiles.length == 0 || layer.tileset == null || layer.tileset.bitmapData == null) continue;
+			tile = tiles[i];
 			
-			ImageCanvasUtil.convertToCanvas (layer.tileset.bitmapData.image);
-			source = layer.tileset.bitmapData.image.src;
+			alpha = tile.alpha;
+			visible = tile.visible;
 			
-			tiles = layer.__tiles;
-			count = tiles.length;
-			rects = layer.tileset.__rects;
+			if (!visible || alpha <= 0) continue;
 			
-			for (i in 0...count) {
+			tileset = (tile.tileset != null) ? tile.tileset : defaultTileset;
+			
+			if (tileset == null) continue;
+			
+			tileData = tileset.__data[tile.id];
+			
+			if (tileData == null) continue;
+			
+			bitmapData = tileset.bitmapData;
+			
+			if (bitmapData == null) continue;
+			
+			if (bitmapData != cacheBitmapData) {
 				
-				tile = tiles[i];
-				
-				if (tile.id != cacheTileID) {
+				if (bitmapData.image.buffer.__srcImage == null) {
 					
-					tileRect = rects[tile.id];
-					cacheTileID = tile.id;
+					ImageCanvasUtil.convertToCanvas (bitmapData.image);
 					
 				}
 				
-				context.drawImage (source, tileRect.x, tileRect.y, tileRect.width, tileRect.height, tile.x, tile.y, tileRect.width, tileRect.height);
+				source = bitmapData.image.src;
+				cacheBitmapData = bitmapData;
 				
 			}
 			
+			context.globalAlpha = tilemap.__worldAlpha * alpha;
+			
+			tileTransform.copyFrom (tile.matrix);
+			tileTransform.concat (transform);
+			
+			if (roundPixels) {
+				
+				context.setTransform (tileTransform.a, tileTransform.b, tileTransform.c, tileTransform.d, Std.int (tileTransform.tx), Std.int (tileTransform.ty));
+				
+			} else {
+				
+				context.setTransform (tileTransform.a, tileTransform.b, tileTransform.c, tileTransform.d, tileTransform.tx, tileTransform.ty);
+				
+			}
+			
+			context.drawImage (source, tileData.x, tileData.y, tileData.width, tileData.height, 0, 0, tileData.width, tileData.height);
+			
 		}
 		
-		if (!tilemap.smoothing) {
+		if (!renderSession.allowSmoothing || !tilemap.smoothing) {
 			
 			untyped (context).mozImageSmoothingEnabled = true;
 			//untyped (context).webkitImageSmoothingEnabled = true;
@@ -88,6 +117,7 @@ class CanvasTilemap {
 			
 		}
 		
+		renderSession.maskManager.popRect ();
 		renderSession.maskManager.popObject (tilemap);
 		
 		#end

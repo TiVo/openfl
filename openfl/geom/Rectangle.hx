@@ -3,10 +3,16 @@ package openfl.geom;
 
 import lime.math.Rectangle in LimeRectangle;
 
+#if !openfl_debug
+@:fileXml('tags="haxe,release"')
+@:noDebug
+#end
+
 
 class Rectangle {
 	
 	
+	private static var __limeRectangle:LimeRectangle;
 	private static var __temp = new Rectangle ();
 	
 	public var bottom (get, set):Float;
@@ -80,7 +86,8 @@ class Rectangle {
 	
 	public function equals (toCompare:Rectangle):Bool {
 		
-		return toCompare != null && x == toCompare.x && y == toCompare.y && width == toCompare.width && height == toCompare.height;
+		if (toCompare == this) return true;
+		else return toCompare != null && x == toCompare.x && y == toCompare.y && width == toCompare.width && height == toCompare.height;
 		
 	}
 	
@@ -221,13 +228,20 @@ class Rectangle {
 			
 		}
 		
-		var cacheRight = right;
-		var cacheBottom = bottom;
+		var offsetX = 0.0;
+		var offsetY = 0.0;
+		var offsetRight = 0.0;
+		var offsetBottom = 0.0;
 		
-		if (this.x < x) this.x = x;
-		if (this.y < y) this.y = y;
-		if (this.right > x + width) this.width = x + width - this.x;
-		if (this.bottom > y + height) this.height = y + height - this.y;
+		if (this.x < x) offsetX = x - this.x;
+		if (this.y < y) offsetY = y - this.y;
+		if (this.right > x + width) offsetRight = (x + width) - this.right;
+		if (this.bottom > y + height) offsetBottom = (y + height) - this.bottom;
+		
+		this.x += offsetX;
+		this.y += offsetY;
+		this.width += offsetRight - offsetX;
+		this.height += offsetBottom - offsetY;
 		
 	}
 	
@@ -265,7 +279,14 @@ class Rectangle {
 	
 	private function __toLimeRectangle ():LimeRectangle {
 		
-		return new LimeRectangle (x, y, width, height);
+		if (__limeRectangle == null) {
+			
+			__limeRectangle = new LimeRectangle ();
+			
+		}
+		
+		__limeRectangle.setTo (x, y, width, height);
+		return __limeRectangle;
 		
 	}
 	

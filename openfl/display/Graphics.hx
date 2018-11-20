@@ -6,6 +6,7 @@ import lime.graphics.Image;
 import openfl._internal.renderer.cairo.CairoGraphics;
 import openfl._internal.renderer.canvas.CanvasGraphics;
 import openfl._internal.renderer.DrawCommandBuffer;
+import openfl._internal.renderer.DrawCommandReader;
 //import openfl._internal.renderer.opengl.utils.RenderTexture;
 import openfl.display.Shader;
 import openfl.errors.ArgumentError;
@@ -26,6 +27,11 @@ import js.html.CanvasElement;
 import js.html.CanvasRenderingContext2D;
 #end
 
+#if !openfl_debug
+@:fileXml('tags="haxe,release"')
+@:noDebug
+#end
+
 @:access(openfl.display.DisplayObject)
 @:access(openfl.geom.Matrix)
 @:access(openfl.geom.Rectangle)
@@ -38,6 +44,7 @@ import js.html.CanvasRenderingContext2D;
 	private var __commands:DrawCommandBuffer;
 	private var __dirty (default, set):Bool = true;
 	private var __height:Int;
+	private var __managed:Bool;
 	private var __positionX:Float;
 	private var __positionY:Float;
 	private var __renderTransform:Matrix;
@@ -119,7 +126,7 @@ import js.html.CanvasRenderingContext2D;
 	
 	public function clear ():Void {
 		
-		__commands.clear();
+		__commands.clear ();
 		__strokePadding = 0;
 		
 		if (__bounds != null) {
@@ -442,7 +449,7 @@ import js.html.CanvasRenderingContext2D;
 	
 	public function drawRoundRectComplex (x:Float, y:Float, width:Float, height:Float, topLeftRadius:Float, topRightRadius:Float, bottomLeftRadius:Float, bottomRightRadius:Float):Void {
 		
-		openfl.Lib.notImplemented ("Graphics.drawRoundRectComplex");
+		openfl.Lib.notImplemented ();
 		
 	}
 	
@@ -580,6 +587,15 @@ import js.html.CanvasRenderingContext2D;
 	}
 	
 	
+	public function readGraphicsData (recurse:Bool = true):Vector<IGraphicsData> {
+		
+		var graphicsData = new Vector<IGraphicsData> ();
+		__owner.__readGraphicsData (graphicsData, recurse);
+		return graphicsData;
+		
+	}
+	
+	
 	private function __calculateBezierCubicPoint (t:Float, p1:Float, p2:Float, p3:Float, p4:Float):Float {
 		
 		var iT = 1 - t;
@@ -641,7 +657,7 @@ import js.html.CanvasRenderingContext2D;
 				
 				#if (js && html5)
 				return CanvasGraphics.hitTest (this, px, py);
-				#elseif (cpp || neko)
+				#elseif (lime_cffi)
 				return CairoGraphics.hitTest (this, px, py);
 				#end
 				
@@ -697,56 +713,203 @@ import js.html.CanvasRenderingContext2D;
 	}
 	
 	
+	private function __readGraphicsData (graphicsData:Vector<IGraphicsData>):Void {
+		
+		var data = new DrawCommandReader (__commands);
+		var path;
+		
+		for (type in __commands.types) {
+			
+			switch (type) {
+				
+				case CUBIC_CURVE_TO:
+					
+					var c = data.readCubicCurveTo ();
+					
+					// TODO: Convert cubic curve to bezier path
+				
+				case CURVE_TO:
+					
+					var c = data.readCurveTo ();
+					path = new GraphicsPath ();
+					path.curveTo (c.controlX, c.controlY, c.anchorX, c.anchorY);
+					graphicsData.push (path);
+				
+				case LINE_TO:
+					
+					var c = data.readLineTo ();
+					path = new GraphicsPath ();
+					path.lineTo (c.x, c.y);
+					graphicsData.push (path);
+					
+				case MOVE_TO:
+					
+					var c = data.readMoveTo ();
+					path = new GraphicsPath ();
+					path.moveTo (c.x, c.y);
+					graphicsData.push (path);
+				
+				case LINE_GRADIENT_STYLE:
+					
+					var c = data.readLineGradientStyle ();
+					
+					// TODO
+				
+				case LINE_BITMAP_STYLE:
+					
+					var c = data.readLineBitmapStyle ();
+					
+					// TODO
+				
+				case LINE_STYLE:
+					
+					var c = data.readLineStyle ();
+					graphicsData.push (new GraphicsStroke (c.thickness, /*c.color, c.alpha,*/ c.pixelHinting, c.scaleMode, c.caps, c.joints, c.miterLimit));
+				
+				case END_FILL:
+					
+					data.readEndFill ();
+					graphicsData.push (new GraphicsEndFill ());
+				
+				case BEGIN_BITMAP_FILL:
+					
+					var c = data.readBeginBitmapFill ();
+					graphicsData.push (new GraphicsBitmapFill (c.bitmap, c.matrix, c.repeat, c.smooth));
+				
+				case BEGIN_FILL:
+					
+					var c = data.readBeginFill ();
+					graphicsData.push (new GraphicsSolidFill (c.color, 1));
+				
+				case BEGIN_GRADIENT_FILL:
+					
+					var c = data.readBeginGradientFill ();
+					graphicsData.push (new GraphicsGradientFill (c.type, c.colors, c.alphas, c.ratios, c.matrix, c.spreadMethod, c.interpolationMethod, c.focalPointRatio));
+				
+				case DRAW_CIRCLE:
+					
+					var c = data.readDrawCircle ();
+					
+					// TODO
+				
+				case DRAW_ELLIPSE:
+					
+					var c = data.readDrawEllipse ();
+					
+					// TODO
+				
+				case DRAW_RECT:
+					
+					var c = data.readDrawEllipse ();
+					
+					// TODO
+				
+				case DRAW_ROUND_RECT:
+					
+					var c = data.readDrawEllipse ();
+					
+					// TODO
+				
+				default:
+					
+					data.skip (type);
+				
+			}
+			
+		}
+		
+	}
+	
+	
 	private function __update ():Void {
 		
 		if (__bounds == null || __bounds.width <= 0 || __bounds.height <= 0) return;
 		
-		var parentTransform = __owner.__getRenderTransform ();
-		var scaleX, scaleY;
+		var parentTransform = __owner.__renderTransform;
+		var scaleX = 1.0, scaleY = 1.0;
 		
-		if (parentTransform.b == 0) {
+		if (parentTransform != null) {
 			
-			scaleX = parentTransform.a;
+			if (parentTransform.b == 0) {
+			
+				scaleX = Math.abs (parentTransform.a);
+			
+			} else {
+			
+				scaleX = Math.sqrt (parentTransform.a * parentTransform.a + parentTransform.b * parentTransform.b);
+				
+			}
+		
+			if (parentTransform.c == 0) {
+			
+				scaleY = Math.abs (parentTransform.d);
+				
+			} else {
+				
+				scaleY = Math.sqrt (parentTransform.c * parentTransform.c + parentTransform.d * parentTransform.d);
+				
+			}
 			
 		} else {
 			
-			scaleX = Math.sqrt (parentTransform.a * parentTransform.a + parentTransform.b * parentTransform.b);
+			return;
 			
 		}
 		
-		if (parentTransform.c == 0) {
-			
-			scaleY = parentTransform.d;
-			
-		} else {
-			
-			scaleY = Math.sqrt (parentTransform.c * parentTransform.c + parentTransform.d * parentTransform.d);
-			
-		}
+		#if openfl_disable_graphics_upscaling
+		if (scaleX > 1) scaleX = 1;
+		if (scaleY > 1) scaleY = 1;
+		#end
 		
 		var width = __bounds.width * scaleX;
 		var height = __bounds.height * scaleY;
 		
-		if (Math.abs (width - __width) > 2 || Math.abs (height - __height) > 2) {
+		if (width < 1 || height < 1) {
 			
-			__dirty = true;
-			__width = Math.floor (width);
-			__height = Math.floor (height);
-			
-			__renderTransform.a = width / __bounds.width;
-			__renderTransform.d = height / __bounds.height;
+			if (__width >= 1 || __height >= 1) __dirty = true;
+			__width  = 0;
+			__height = 0;
+			return;
 			
 		}
 		
-		if (__width <= 0 || __height <= 0) return;
+		__renderTransform.a = width  / __bounds.width;
+		__renderTransform.d = height / __bounds.height;
+		var inverseA = (1 / __renderTransform.a);
+		var inverseD = (1 / __renderTransform.d);
 		
-		__worldTransform.a = 1 / __renderTransform.a;
-		__worldTransform.b = 0;
-		__worldTransform.c = 0;
-		__worldTransform.d = 1 / __renderTransform.d;
-		__worldTransform.tx = __bounds.x;
-		__worldTransform.ty = __bounds.y;
-		__worldTransform.concat (__owner.__worldTransform);
+		// Inlined & simplified `__worldTransform.concat (parentTransform)` below:
+		__worldTransform.a = inverseA * parentTransform.a;
+		__worldTransform.b = inverseA * parentTransform.b;
+		__worldTransform.c = inverseD * parentTransform.c;
+		__worldTransform.d = inverseD * parentTransform.d;
+		
+		var x = __bounds.x;
+		var y = __bounds.y;
+		var tx = x * parentTransform.a + y * parentTransform.c + parentTransform.tx;
+		var ty = x * parentTransform.b + y * parentTransform.d + parentTransform.ty;
+		
+		// Floor the world position for crisp graphics rendering
+		__worldTransform.tx = Math.ffloor (tx);
+		__worldTransform.ty = Math.ffloor (ty);
+		
+		// Offset the rendering with the subpixel offset removed by Math.floor above
+		__renderTransform.tx = __worldTransform.__transformInverseX (tx, ty);
+		__renderTransform.ty = __worldTransform.__transformInverseY (tx, ty);
+		
+		// Calculate the size to contain the graphics and the extra subpixel
+		var newWidth  = Math.ceil(width  + __renderTransform.tx);
+		var newHeight = Math.ceil(height + __renderTransform.ty);
+		
+		// Mark dirty if render size changed
+		if (newWidth != __width || newHeight != __height) {
+			
+			__dirty = true;
+			
+		}
+		
+		__width  = newWidth;
+		__height = newHeight;
 		
 	}
 	

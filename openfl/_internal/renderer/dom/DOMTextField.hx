@@ -90,6 +90,13 @@ class DOMTextField {
 							if (textField.htmlText != textField.__div.innerHTML) {
 								
 								textField.htmlText = textField.__div.innerHTML;
+								
+								if (textField.__displayAsPassword) {
+									
+									// TODO: Enable display as password
+									
+								}
+								
 								textField.__dirty = false;
 								
 							}
@@ -97,6 +104,18 @@ class DOMTextField {
 						}, true);
 						
 					}
+					
+					if (!textEngine.multiline) {
+						
+						textField.__style.setProperty ("white-space", "nowrap", null);
+						
+					} else {
+						
+						textField.__style.setProperty ("word-wrap", "break-word", null);
+						
+					}
+					
+					textField.__style.setProperty ("overflow", "hidden", null);
 					
 					if (textEngine.selectable) {
 						
@@ -115,11 +134,12 @@ class DOMTextField {
 					// TODO: Handle ranges using span
 					// TODO: Vertical align
 					
-					textField.__div.innerHTML = textEngine.text;
+					//textField.__div.innerHTML = textEngine.text;
+					textField.__div.innerHTML = new EReg ("\n", "g").replace (textEngine.text, "<br>");
 					
 					if (textEngine.background) {
 						
-						style.setProperty ("background-color", "#" + StringTools.hex (textEngine.backgroundColor, 6), null);
+						style.setProperty ("background-color", "#" + StringTools.hex (textEngine.backgroundColor & 0xFFFFFF, 6), null);
 						
 					} else {
 						
@@ -129,7 +149,7 @@ class DOMTextField {
 					
 					if (textEngine.border) {
 						
-						style.setProperty ("border", "solid 1px #" + StringTools.hex (textEngine.borderColor, 6), null);
+						style.setProperty ("border", "solid 1px #" + StringTools.hex (textEngine.borderColor & 0xFFFFFF, 6), null);
 						
 					} else {
 						
@@ -138,7 +158,7 @@ class DOMTextField {
 					}
 					
 					style.setProperty ("font", TextEngine.getFont (textField.__textFormat), null);
-					style.setProperty ("color", "#" + StringTools.hex (textField.__textFormat.color, 6), null);
+					style.setProperty ("color", "#" + StringTools.hex (textField.__textFormat.color & 0xFFFFFF, 6), null);
 					
 					if (textEngine.autoSize != TextFieldAutoSize.NONE) {
 						
@@ -185,9 +205,8 @@ class DOMTextField {
 			
 			if (textField.__div != null) {
 				
-				// TODO: Enable scrollRect clipping
-				
-				DOMRenderer.applyStyle (textField, renderSession, true, true, false);
+				DOMRenderer.updateClip (textField, renderSession);
+				DOMRenderer.applyStyle (textField, renderSession, true, true, true);
 				
 			}
 			

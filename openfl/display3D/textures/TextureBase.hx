@@ -1,111 +1,274 @@
 package openfl.display3D.textures;
 
 
-import lime.graphics.opengl.GLFramebuffer;
+import lime.graphics.utils.ImageCanvasUtil;
+import lime.graphics.Image;
+import lime.graphics.opengl.GL;
 import lime.graphics.opengl.GLTexture;
-import lime.utils.ArrayBufferView;
-import lime.utils.UInt8Array;
+import openfl._internal.stage3D.SamplerState;
+import openfl._internal.stage3D.GLUtils;
+import openfl.display.BitmapData;
 import openfl.events.EventDispatcher;
-import openfl.utils.ByteArray;
-import openfl.utils.ByteArray.ByteArrayData;
+import openfl.errors.IllegalOperationError;
 
+@:access(openfl.display.BitmapData)
 @:access(openfl.display3D.Context3D)
 
 
 class TextureBase extends EventDispatcher {
 	
 	
+	private static var __isGLES:Null<Bool>;
+	
+	private var __alphaTexture:Texture;
+	private var __compressedMemoryUsage:Int;
 	private var __context:Context3D;
-	private var __frameBuffer:GLFramebuffer;
-	private var __glTexture:GLTexture;
+	private var __format:Int;
 	private var __height:Int;
+	private var __internalFormat:Int;
+	private var __memoryUsage:Int;
+	private var __optimizeForRenderToTexture:Bool;
+	private var __outputTextureMemoryUsage:Bool = false;
+	private var __samplerState:SamplerState;
+	private var __streamingLevels:Int;
+	private var __textureID:GLTexture;
+	private var __textureTarget:Int;
 	private var __width:Int;
 	
 	
-	private function new (context:Context3D, glTexture:GLTexture, width:Int = 0, height:Int = 0) {
+	private function new (context:Context3D, target:Int) {
 		
 		super ();
 		
 		__context = context;
-		__width = width;
-		__height = height;
-		__glTexture = glTexture;
+		__textureTarget = target;
+		
+		__textureID = GL.createTexture ();
+		
+		#if !sys
+		
+		__internalFormat = GL.RGBA;
+		__format = GL.RGBA;
+		
+		#elseif (ios || tvos)
+		
+		__internalFormat = GL.RGBA;
+		__format = GL.BGRA_EXT;
+		
+		#else
+		
+		if (__isGLES == null) {
+			
+			var version:String = GL.getParameter (GL.VERSION);
+			
+			if (version == null) {
+				
+				__isGLES = false;
+				
+			} else {
+				
+				__isGLES = (version.indexOf ("OpenGL ES") > -1 && version.indexOf ("WebGL") == -1);
+				
+			}
+			
+		}
+		
+		__internalFormat = (__isGLES ? GL.BGRA_EXT : GL.RGBA);
+		__format = GL.BGRA_EXT;
+		
+		#end
+		
+		__memoryUsage = 0;
+		__compressedMemoryUsage = 0;
 		
 	}
 	
 	
 	public function dispose ():Void {
 		
-		__context.__deleteTexture (this);
+		if (__alphaTexture != null) {
+			
+			__alphaTexture.dispose ();
+			
+		}
+		
+		GL.deleteTexture (__textureID);
+		
+		if (__compressedMemoryUsage > 0) {
+			
+			__context.__statsDecrement (Context3D.Context3DTelemetry.COUNT_TEXTURE_COMPRESSED);
+			var currentCompressedMemory = __context.__statsSubtract (Context3D.Context3DTelemetry.MEM_TEXTURE_COMPRESSED, __compressedMemoryUsage);
+			
+			#if debug
+			if (__outputTextureMemoryUsage) {
+				
+				trace (" - Texture Compressed GPU Memory (-" + __compressedMemoryUsage + ") - Current Compressed Memory : " + currentCompressedMemory);
+				
+			}
+			#end
+			
+			__compressedMemoryUsage = 0;
+			
+		}
+		
+		if (__memoryUsage > 0) {
+			
+			__context.__statsDecrement (Context3D.Context3DTelemetry.COUNT_TEXTURE);
+			var currentMemory = __context.__statsSubtract (Context3D.Context3DTelemetry.MEM_TEXTURE, __memoryUsage);
+			
+			#if debug
+			if (__outputTextureMemoryUsage) {
+				
+				trace (" - Texture GPU Memory (-" + __memoryUsage + ") - Current Memory : " + currentMemory);
+				
+			}
+			#end
+			
+			__memoryUsage = 0;
+			
+		}
 		
 	}
 	
 	
-	private function __flipPixels (inData:ArrayBufferView, _width:Int, _height:Int):UInt8Array {
+	private function __getImage (bitmapData:BitmapData):Image {
 		
-		#if native
-		if (inData == null) {
+		var image =	bitmapData.image;
+		
+		if (!bitmapData.__isValid || image == null) {
 			
 			return null;
 			
 		}
 		
-		var data = __getUInt8ArrayFromArrayBufferView (inData);
-		var data2 = new UInt8Array (data.length);
-		var bpp = 4;
-		var bytesPerLine = _width * bpp;
-		var srcPosition = (_height - 1) * bytesPerLine;
-		var dstPosition = 0;
+		#if (js && html5)
+		ImageCanvasUtil.sync (image, false);
+		#end
 		
-		for (i in 0 ... _height) {
+		#if (js && html5)
+		
+		if (image.type != DATA && !image.premultiplied) {
 			
-			data2.set (data.subarray (srcPosition, srcPosition + bytesPerLine), dstPosition);
-			srcPosition -= bytesPerLine;
-			dstPosition += bytesPerLine;
+			GL.pixelStorei (GL.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
+			
+		} else if (!image.premultiplied && image.transparent) {
+			
+			GL.pixelStorei (GL.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+			image = image.clone ();
+			image.premultiplied = true;
 			
 		}
 		
-		return data2;
-		#else
-		return null;
-		#end
+		// TODO: Some way to support BGRA on WebGL?
 		
-	}
-	
-	
-	private function __getSizeForMipLevel (miplevel:Int):{ width:Int, height:Int } {
-		
-		var _width = __width;
-		var _height = __height;
-		var lv = miplevel;
-		
-		while (lv > 0) {
+		if (image.format != RGBA32) {
 			
-			_width >>= 1;
-			_height >>= 1;
-			lv >>= 1;
+			image = image.clone ();
+			image.format = RGBA32;
+			image.buffer.premultiplied = true;
+			#if openfl_power_of_two
+			image.powerOfTwo = true;
+			#end
 			
 		}
 		
-		return { width: _width, height: _height };
-		
-	}
-	
-	
-	private function __getUInt8ArrayFromByteArray (data:ByteArray, byteArrayOffset:Int):UInt8Array {
-		
-		#if js
-		return byteArrayOffset == 0 ? @:privateAccess (data:ByteArrayData).b : new UInt8Array (data.toArrayBuffer (), byteArrayOffset);
 		#else
-		return new UInt8Array (data.toArrayBuffer (), byteArrayOffset);
+		
+		if (#if openfl_power_of_two !image.powerOfTwo || #end (!image.premultiplied && image.transparent)) {
+			
+			image = image.clone ();
+			image.premultiplied = true;
+			#if openfl_power_of_two
+			image.powerOfTwo = true;
+			#end
+			
+		}
+		
 		#end
 		
+		return image;
+		
 	}
 	
 	
-	private function __getUInt8ArrayFromArrayBufferView (data:ArrayBufferView):UInt8Array {
+	private function __getTexture ():GLTexture {
 		
-		return new UInt8Array (data.buffer, data.byteOffset, data.byteLength);
+		return __textureID;
+		
+	}
+	
+	
+	private function __setSamplerState (state:SamplerState):Void {
+		
+		if (!state.equals (__samplerState)) {
+			
+			GL.bindTexture (__textureTarget, __textureID);
+			GLUtils.CheckGLError ();
+			GL.texParameteri (__textureTarget, GL.TEXTURE_MIN_FILTER, state.minFilter);
+			GLUtils.CheckGLError ();
+			GL.texParameteri (__textureTarget, GL.TEXTURE_MAG_FILTER, state.magFilter);
+			GLUtils.CheckGLError ();
+			GL.texParameteri (__textureTarget, GL.TEXTURE_WRAP_S, state.wrapModeS);
+			GLUtils.CheckGLError ();
+			GL.texParameteri (__textureTarget, GL.TEXTURE_WRAP_T, state.wrapModeT);
+			GLUtils.CheckGLError ();
+			
+			if (state.lodBias != 0.0) {
+				
+				// TODO
+				//throw new IllegalOperationError("Lod bias setting not supported yet");
+				
+			}
+			
+			__samplerState = state;
+			
+		}
+		
+	}
+	
+	
+	private function __trackCompressedMemoryUsage (memory:Int):Void {
+		
+		if (__compressedMemoryUsage == 0) {
+			
+			__context.__statsIncrement (Context3D.Context3DTelemetry.COUNT_TEXTURE_COMPRESSED);
+			
+		}
+		
+		__compressedMemoryUsage += memory;
+		var currentCompressedMemory = __context.__statsAdd (Context3D.Context3DTelemetry.MEM_TEXTURE_COMPRESSED, memory);
+		
+		#if debug
+		if (__outputTextureMemoryUsage) {
+			
+			trace (" + Texture Compressed GPU Memory (+" + memory + ") - Current Compressed Memory : " + currentCompressedMemory);
+			
+		}
+		#end
+		
+		__trackMemoryUsage (memory);
+		
+	}
+	
+	
+	private function __trackMemoryUsage (memory:Int):Void {
+		
+		if (__memoryUsage == 0) {
+			
+			__context.__statsIncrement (Context3D.Context3DTelemetry.COUNT_TEXTURE);
+			
+		}
+		
+		__memoryUsage += memory;
+		var currentMemory = __context.__statsAdd (Context3D.Context3DTelemetry.MEM_TEXTURE, memory);
+		
+		#if debug
+		if (__outputTextureMemoryUsage) {
+			
+			trace (" + Texture GPU Memory (+" + memory + ") - Current Memory : " + currentMemory);
+			
+		}
+		#end
 		
 	}
 	

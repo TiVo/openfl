@@ -7,6 +7,7 @@ import lime.graphics.cairo.CairoFontFace;
 import lime.graphics.opengl.GLTexture;
 import lime.system.System;
 import lime.text.TextLayout;
+import openfl.Vector;
 import openfl.events.Event;
 import openfl.events.FocusEvent;
 import openfl.events.MouseEvent;
@@ -34,6 +35,11 @@ import js.Browser;
 import haxe.io.Path;
 #end
 
+#if !openfl_debug
+@:fileXml('tags="haxe,release"')
+@:noDebug
+#end
+
 @:access(openfl.text.Font)
 @:access(openfl.text.TextField)
 @:access(openfl.text.TextFormat)
@@ -41,21 +47,6 @@ import haxe.io.Path;
 
 class TextEngine {
 	
-	/* The stock OpenFL adds 2 pixels margins around text from each side. These
-       margins are not included into the textWidth and textHeight properties'
-       values.
-       Widgets based on the OpenFL's TextField that set their (and TextField's)
-       size basing on the text size have no chance to get a size that includes
-       those margins because openfl.text.TextField doesn't have any APIs to get
-       margins' values. The getLineMetrics() API is line-specific and returns
-       only left margin.
-       Since there is no way for TextFields users to get margins' values, I
-       (nmamaev) believe the idea of those margins itself is wrong. So setting
-       all margins to zero. */
-	//public static inline var HORIZONTAL_MARGIN : Float = 2.0;
-	//public static inline var VERTICAL_MARGIN : Float = 2.0;
-	public static inline var HORIZONTAL_MARGIN : Float = 0.0;
-	public static inline var VERTICAL_MARGIN : Float = 0.0;
 	
 	private static inline var UTF8_TAB = 9;
 	private static inline var UTF8_ENDLINE = 10;
@@ -78,17 +69,16 @@ class TextEngine {
 	public var bottomScrollV (default, null):Int;
 	public var bounds:Rectangle;
 	public var caretIndex:Int;
-	public var displayAsPassword:Bool;
 	public var embedFonts:Bool;
 	public var gridFitType:GridFitType;
 	public var height:Float;
-	public var layoutGroups:Array<TextLayoutGroup>;
-	public var lineAscents:Array<Float>;
-	public var lineBreaks:Array<Int>;
-	public var lineDescents:Array<Float>;
-	public var lineLeadings:Array<Float>;
-	public var lineHeights:Array<Float>;
-	public var lineWidths:Array<Float>;
+	public var layoutGroups:Vector<TextLayoutGroup>;
+	public var lineAscents:Vector<Float>;
+	public var lineBreaks:Vector<Int>;
+	public var lineDescents:Vector<Float>;
+	public var lineLeadings:Vector<Float>;
+	public var lineHeights:Vector<Float>;
+	public var lineWidths:Vector<Float>;
 	public var maxChars:Int;
 	public var maxScrollH (default, null):Int;
 	public var maxScrollV (default, null):Int;
@@ -101,7 +91,7 @@ class TextEngine {
 	public var sharpness:Float;
 	public var text:String;
 	public var textHeight:Float;
-	public var textFormatRanges:Array<TextFormatRange>;
+	public var textFormatRanges:Vector<TextFormatRange>;
 	public var textWidth:Float;
 	public var type:TextFieldType;
 	public var width:Float;
@@ -123,6 +113,7 @@ class TextEngine {
 	//@:noCompletion private var __tileData:Map<Tilesheet, Array<Float>>;
 	//@:noCompletion private var __tileDataLength:Map<Tilesheet, Int>;
 	//@:noCompletion private var __tilesheets:Map<Tilesheet, Bool>;
+	private var __useIntAdvances:Null<Bool>;
 	
 	@:noCompletion @:dox(hide) public var __cairoFont:CairoFontFace;
 	@:noCompletion @:dox(hide) public var __font:Font;
@@ -144,7 +135,6 @@ class TextEngine {
 		
 		type = TextFieldType.DYNAMIC;
 		autoSize = TextFieldAutoSize.NONE;
-		displayAsPassword = false;
 		embedFonts = false;
 		selectable = true;
 		borderColor = 0x000000;
@@ -159,14 +149,14 @@ class TextEngine {
 		scrollV = 1;
 		wordWrap = false;
 		
-		lineAscents = new Array ();
-		lineBreaks = new Array ();
-		lineDescents = new Array ();
-		lineLeadings = new Array ();
-		lineHeights = new Array ();
-		lineWidths = new Array ();
-		layoutGroups = new Array ();
-		textFormatRanges = new Array ();
+		lineAscents = new Vector ();
+		lineBreaks = new Vector ();
+		lineDescents = new Vector ();
+		lineLeadings = new Vector ();
+		lineHeights = new Vector ();
+		lineWidths = new Vector ();
+		layoutGroups = new Vector ();
+		textFormatRanges = new Vector ();
 		
 		#if (js && html5)
 		__canvas = cast Browser.document.createElement ("canvas");
@@ -178,7 +168,7 @@ class TextEngine {
 	
 	private static function findFont (name:String):Font {
 		
-		#if (cpp || neko || nodejs)
+		#if (lime_cffi)
 		
 		for (registeredFont in Font.__registeredFonts) {
 			
@@ -218,6 +208,43 @@ class TextEngine {
 	}
 	
 	
+	public static function getFormatHeight (format:TextFormat):Float {
+		
+		var ascent, descent, leading;
+		
+		#if (js && html5)
+		
+		__context.font = getFont (format);
+		
+		ascent = format.size;
+		descent = format.size * 0.185;
+		leading = format.leading;
+		
+		#elseif (lime_cffi)
+		
+		var font = getFontInstance (format);
+		
+		if (font != null) {
+			
+			ascent = (font.ascender / font.unitsPerEM) * format.size;
+			descent = Math.abs ((font.descender / font.unitsPerEM) * format.size);
+			leading = format.leading;
+			
+		} else {
+			
+			ascent = format.size;
+			descent = format.size * 0.185;
+			leading = format.leading;
+			
+		}
+		
+		#end
+		
+		return ascent + descent + leading;
+		
+	}
+	
+	
 	public static function getFont (format:TextFormat):String {
 		
 		var font = format.italic ? "italic " : "normal ";
@@ -231,7 +258,7 @@ class TextEngine {
 			case "_sans": "sans-serif";
 			case "_serif": "serif";
 			case "_typewriter": "monospace";
-			default: "'" + format.font + "'";
+			default: "'" + ~/^[\s'"]+(.*)[\s'"]+$/.replace(format.font, '$1') + "'";
 			
 		}
 		
@@ -242,7 +269,7 @@ class TextEngine {
 	
 	public static function getFontInstance (format:TextFormat):Font {
 		
-		#if (cpp || neko || nodejs)
+		#if (lime_cffi)
 		
 		var instance = null;
 		var fontList = null;
@@ -481,11 +508,11 @@ class TextEngine {
 	
 	private function getLineMeasurements ():Void {
 		
-		lineAscents.splice (0, lineAscents.length);
-		lineDescents.splice (0, lineDescents.length);
-		lineLeadings.splice (0, lineLeadings.length);
-		lineHeights.splice (0, lineHeights.length);
-		lineWidths.splice (0, lineWidths.length);
+		lineAscents.length = 0;
+		lineDescents.length = 0;
+		lineLeadings.length = 0;
+		lineHeights.length = 0;
+		lineWidths.length = 0;
 		
 		var currentLineAscent = 0.0;
 		var currentLineDescent = 0.0;
@@ -517,7 +544,7 @@ class TextEngine {
 				
 				numLines++;
 				
-				if (textHeight <= height - VERTICAL_MARGIN) {
+				if (textHeight <= height - 2) {
 					
 					bottomScrollV++;
 					
@@ -539,15 +566,15 @@ class TextEngine {
 			}
 			
 			currentLineHeight = Math.max (currentLineHeight, group.height);
-			currentLineWidth = group.offsetX - HORIZONTAL_MARGIN + group.width;
+			currentLineWidth = group.offsetX - 2 + group.width;
 			
 			if (currentLineWidth > textWidth) {
-
+				
 				textWidth = currentLineWidth;
 				
 			}
 			
-			textHeight = group.offsetY - VERTICAL_MARGIN + group.ascent + group.descent;
+			textHeight = group.offsetY - 2 + group.ascent + group.descent;
 			
 		}
 		
@@ -567,15 +594,37 @@ class TextEngine {
 				
 			}
 			
-		} else if (textHeight <= height - VERTICAL_MARGIN) {
+		} else if (textHeight <= height - 2) {
 			
 			bottomScrollV++;
 			
 		}
 		
-		if (textWidth > width - 2 * HORIZONTAL_MARGIN) {
+		if (autoSize != NONE) {
 			
-			maxScrollH = Std.int (textWidth - width + 2 * HORIZONTAL_MARGIN);
+			switch (autoSize) {
+				
+				case LEFT, RIGHT, CENTER:
+					
+					if (!wordWrap /*&& (width < textWidth + 4)*/) {
+						
+						width = textWidth + 4;
+						
+					}
+					
+					height = textHeight + 4;
+					bottomScrollV = numLines;
+				
+				default:
+					
+				
+			}
+			
+		}
+		
+		if (textWidth > width - 4) {
+			
+			maxScrollH = Std.int (textWidth - width + 4);
 			
 		} else {
 			
@@ -584,303 +633,490 @@ class TextEngine {
 		}
 		
 		maxScrollV = numLines - bottomScrollV + 1;
-
+		
 	}
-
-    // Recalculates the layout groups    
-    private function getLayoutGroups()
-    {
-        // Clear existing layout groups
-        layoutGroups.splice(0, layoutGroups.length);
-
-        if (text.length == 0) {
-            return;
-        }
-        
-        var font = null;
-		var formatRange : TextFormatRange = null;
-        var textLayout : TextLayout = new TextLayout();
+	
+	
+	private function getLayoutGroups ():Void {
+		
+		layoutGroups.length = 0;
+		
 		var rangeIndex = -1;
-        var spaceWidth = 0.0;
-        var ascent = 0.0, descent = 0.0, leading = 0, lineHeight = 0.0;
-		var currentTextFormat = TextField.__defaultTextFormat.clone();
-        var index : Int = 0;
-        var x = HORIZONTAL_MARGIN;
-        var y = VERTICAL_MARGIN;
-        var max_x = this.width - HORIZONTAL_MARGIN;
-        var lineIndex = 0;
-
-        // Helper function ...
-		inline function getAdvances(text : String, startIndex : Int,
-                                    endIndex : Int) : Array<Float>
-        {
+		var formatRange:TextFormatRange = null;
+		var font = null;
+		
+		var currentFormat = TextField.__defaultTextFormat.clone ();
+		
+		var leading = 0;
+		var ascent = 0.0;
+		var descent = 0.0;
+		
+		var layoutGroup = null, advances = null;
+		var widthValue, heightValue = 0.0;
+		
+		var previousSpaceIndex = 0, previousBreakIndex = 0;
+		var spaceIndex = text.indexOf (" ");
+		var breakIndex = getLineBreakIndex ();
+		
+		var marginRight = 0.0;
+		var offsetX = 2.0;
+		var offsetY = 2.0;
+		var textIndex = 0;
+		var lineIndex = 0;
+		var lineFormat = null;
+		
+		inline function getAdvances (text:String, startIndex:Int, endIndex:Int):Array<Float> {
+			
 			// TODO: optimize
 			
-			var advances = [ ];
+			var advances = [];
 			
 			#if (js && html5)
-
-            while (startIndex < endIndex) {
-				advances.push
-                    (__context.measureText(text.charAt(startIndex++)).width);
+			
+			if (__useIntAdvances == null) {
+				
+				__useIntAdvances = ~/Trident\/7.0/.match (Browser.navigator.userAgent); // IE
+				
+			}
+			
+			if (__useIntAdvances) {
+				
+				// slower, but more accurate if browser returns Int measurements
+				
+				var previousWidth = 0.0;
+				var width;
+				
+				for (i in startIndex...endIndex) {
+					
+					width = __context.measureText (text.substring (startIndex, i + 1)).width;
+					
+					advances.push (width - previousWidth);
+					
+					previousWidth = width;
+					
+				}
+				
+			} else {
+				
+				for (i in startIndex...endIndex) {
+					
+					advances.push (__context.measureText (text.charAt (i)).width);
+					
+				}
+				
 			}
 			
 			#else
 			
+			if (__textLayout == null) {
+				
+				__textLayout = new TextLayout ();
+				
+			}
+			
 			var width = 0.0;
-
-            textLayout.text = null;
-            textLayout.font = font;
-            if (formatRange.format.size != null) {
-                textLayout.size = formatRange.format.size;
-            }
-            textLayout.text = text.substring(startIndex, endIndex);
-
-            var i = 0;
-            while (i < textLayout.positions.length) {
-				advances.push(textLayout.positions[i++].advance.x);
+			
+			__textLayout.text = null;
+			__textLayout.font = font;
+			
+			if (formatRange.format.size != null) {
+				
+				__textLayout.size = formatRange.format.size;
+				
+			}
+			
+			__textLayout.text = text.substring (startIndex, endIndex);
+			
+			for (position in __textLayout.positions) {
+				
+				advances.push (position.advance.x);
+				
 			}
 			
 			#end
 			
 			return advances;
-        }
-
-        // Helper function ...
-		inline function getAdvancesWidth(advances : Array<Float>) : Float
-        {
+			
+		}
+		
+		inline function getAdvancesWidth (advances:Array<Float>):Float {
+			
 			var width = 0.0;
-            var i = 0;
-            while (i < advances.length) {
-				width += advances[i++];
+			
+			for (advance in advances) {
+				
+				width += advance;
+				
 			}
 			
 			return width;
+			
 		}
-        
-		inline function nextFormatRange()
-        {
-			if (rangeIndex < (this.textFormatRanges.length - 1)) {
-				rangeIndex += 1;
-				formatRange = this.textFormatRanges[rangeIndex];
-				currentTextFormat.__merge(formatRange.format);
+		
+		inline function getTextWidth (text:String):Float {
+			
+			#if (js && html5)
+			
+			return __context.measureText (text).width;
+			
+			#else
+			
+			if (__textLayout == null) {
+				
+				__textLayout = new TextLayout ();
+				
+			}
+			
+			var width = 0.0;
+			
+			__textLayout.text = null;
+			__textLayout.font = font;
+			
+			if (formatRange.format.size != null) {
+				
+				__textLayout.size = formatRange.format.size;
+				
+			}
+			
+			__textLayout.text = text;
+			
+			for (position in __textLayout.positions) {
+				
+				width += position.advance.x;
+				
+			}
+			
+			return width;
+			
+			#end
+			
+		}
+		
+		inline function nextFormatRange ():Void {
+			
+			if (rangeIndex < textFormatRanges.length - 1) {
+				
+				rangeIndex++;
+				formatRange = textFormatRanges[rangeIndex];
+				currentFormat.__merge (formatRange.format);
 				
 				#if (js && html5)
-                __context.font = getFont(currentTextFormat);
 				
-				ascent = currentTextFormat.size;
-				descent = currentTextFormat.size * 0.185;
-				leading = currentTextFormat.leading;
+				__context.font = getFont (currentFormat);
 				
-				#elseif (cpp || neko || nodejs)
+				ascent = currentFormat.size;
+				descent = currentFormat.size * 0.185;
+				leading = currentFormat.leading;
 				
-				font = getFontInstance(currentTextFormat);
+				heightValue = ascent + descent + leading;
 				
-				if (font == null) {
-					ascent = currentTextFormat.size;
-					descent = currentTextFormat.size * 0.185;
-					leading = currentTextFormat.leading;
-                }
-                else {
-					ascent = ((font.ascender / font.unitsPerEM) *
-                              currentTextFormat.size);
-					descent = Math.abs((font.descender / font.unitsPerEM) *
-                                       currentTextFormat.size);
-					leading = currentTextFormat.leading;
+				#elseif (lime_cffi)
+				
+				font = getFontInstance (currentFormat);
+				
+				if (font != null) {
+					
+					ascent = (font.ascender / font.unitsPerEM) * currentFormat.size;
+					descent = Math.abs ((font.descender / font.unitsPerEM) * currentFormat.size);
+					leading = currentFormat.leading;
+					
+					heightValue = ascent + descent + leading;
+					
+				} else {
+					
+					ascent = currentFormat.size;
+					descent = currentFormat.size * 0.185;
+					leading = currentFormat.leading;
+					
+					heightValue = ascent + descent + leading;
+					
 				}
+				
 				#end
-
-                spaceWidth = getAdvances(" ", 0, 1)[0];
+				
 			}
+			
 		}
-
-        // Get the first format range
-        nextFormatRange();
-
-        // Current line height is that of the current text format
-        lineHeight = ascent + descent + leading;
-
-        // Handle each line in sequence
-        while (index < text.length) {
-            // breakIndex is the index of the next break (or the end of text
-            // if there is no next break)
-            var breakIndex = getLineBreakIndex(index);
-            if (breakIndex == -1) {
-                breakIndex = text.length;
-            }
-
-            // Handle format ranges up to breakIndex
-            while (index < breakIndex) {
-                // rangeEndIndex is the end of the current format range (or
-                // breakIndex if the current format range goes beyond
-                // breakIndex)
-                var rangeEndIndex = formatRange.end;
-                if (rangeEndIndex > breakIndex) {
-                    rangeEndIndex = breakIndex;
-                }
-                // rangeEndIndex may be manipulated within the body of this
-                // loop but its original value may be needed, so save it
-                var rangeMax = rangeEndIndex;
-
-                // Get the positions that will be used for this range
-                var advances = getAdvances(text, index, rangeEndIndex);
-                
-                // Compute length of the range
-                var len = getAdvancesWidth(advances);
-
-                // If word wrapping is allowed, then while the current range
-                // does not fit, back rangeEndIndex up to the end of the
-                // previous word where all characters fit.
-                var wrap = false;
-                var indexOfAnySpace = -1;
-                if (this.wordWrap && ((x + len) > max_x)) {
-                    // Trim whitespace to see if the range fits now
-                    if ((rangeEndIndex > index) &&
-                        StringTools.isSpace(text, rangeEndIndex - 1)) {
-                        do {
-                            rangeEndIndex -= 1;
-                            len -= advances[rangeEndIndex - index];
-                            indexOfAnySpace = rangeEndIndex;
-                        }
-                        while ((rangeEndIndex > index) &&
-                               StringTools.isSpace(text, rangeEndIndex - 1));
-                    }
-                    // While it doesn't fit ...
-                    while (((x + len) > max_x) && (rangeEndIndex > index)) {
-                        // Skip back to just before the current word
-                        do {
-                            rangeEndIndex -= 1;
-                            len -= advances[rangeEndIndex - index];
-                        } while ((rangeEndIndex > index) &&
-                                 !StringTools.isSpace(text, rangeEndIndex - 1));
-                        // Skip back to the end of the previous word
-                        while ((rangeEndIndex > index) &&
-                               StringTools.isSpace(text, rangeEndIndex - 1)) {
-                            rangeEndIndex -= 1;
-                            len -= advances[rangeEndIndex - index];
-                            indexOfAnySpace = rangeEndIndex;
-                        }
-                        // Recompute length of shorter range
-                        wrap = true;
-                    }
-
-                    // If not even a single non-whitespace character could be
-                    // fit ...
-                    if (rangeEndIndex == index) {
-                        if (indexOfAnySpace != -1)
-                        {
-                            // If we're at the beginning of a line, then force the
-                            // first non-whitespace character before the break
-                            // onto the line
-                            if (x == HORIZONTAL_MARGIN) {
-                                while ((index < (rangeMax - 1)) &&
-                                       StringTools.isSpace(text, index)) {
-                                    index += 1;
-                                    advances.shift();
-                                }
-                                // If absolutely nothing could be included, then
-                                // just go to the next break
-                                if (StringTools.isSpace(text, index)) {
-                                    index = breakIndex;
-                                    break;
-                                }
-                                rangeEndIndex = index + 1;
-                                len = advances[index];
-                            }
-                            // Else, just go to the beginning of the next line
-                            // and try again
-                            else {
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            // It means that we have full word and it can't be fit fully.
-                            // Then let's go fit while we can
-                            while (rangeEndIndex < rangeMax)
-                            {
-                                len += advances[rangeEndIndex - index];
-
-                                if (x + len > max_x)
-                                {
-                                    len -= advances[rangeEndIndex - index];
-                                    break;
-                                }
-                                ++rangeEndIndex;
-                            }
-
-                            // if the width of one symbol is more than maxWidth,
-                            // then add only one symbol and break it again
-                            if (rangeEndIndex == index)
-                            {
-                                rangeEndIndex = index + 1;
-                            }
-                        }
-                    }
-                }
-
-                // Add a layout group for this range
-                var layoutGroup = new TextLayoutGroup
-                    (formatRange.format, index, rangeEndIndex);
-                if (advances.length != (rangeEndIndex - index)) {
-                    advances = advances.slice(0, rangeEndIndex - index);
-                }
-                layoutGroup.advances = advances;
-                layoutGroup.offsetX = x;
-                layoutGroup.ascent = ascent;
-                layoutGroup.descent = descent;
-                layoutGroup.leading = leading;
-                layoutGroup.lineIndex = lineIndex;
-                layoutGroup.offsetY = y;
-                layoutGroup.width = len;
-                layoutGroup.height = lineHeight;
-                layoutGroups.push(layoutGroup);
-
-                if (wrap) {
-                    x = HORIZONTAL_MARGIN;
-                    y += lineHeight;
-                    lineIndex += 1;
-                    // Line height is now the height of the current text format
-                    lineHeight = ascent + descent + leading;
-                    // Skip the whitespace at the beginning of the next line
-                    while ((rangeEndIndex < rangeMax) &&
-                           StringTools.isSpace(text, rangeEndIndex)) {
-                        rangeEndIndex += 1;
-                    }
-                }
-                else {
-                    x += len;
-                }
-
-                // If the range has been completely used up, go to the
-                // next range
-                if (rangeEndIndex == formatRange.end) {
-                    nextFormatRange();
-                    // If the current text format has an even bigger height,
-                    // then the whole line is now this height
-                    var nextHeight = ascent + descent + leading;
-                    if (nextHeight > lineHeight) {
-                        lineHeight = nextHeight;
-                    }
-                }
-
-                index = rangeEndIndex;
-            }
-
-            // Go to the next line
-            x = HORIZONTAL_MARGIN;
-            y += lineHeight;
-            lineIndex += 1;
-            
-            // Line height is now the height of the current text format
-            lineHeight = ascent + descent + leading;
-
-            // If we're at a break, skip it
-            if (index == breakIndex) {
-                index += 1;
-            }
-        }
-    }
+		
+		nextFormatRange ();
+		
+		lineFormat = formatRange.format;
+		var wrap;
+		var maxLoops = text.length;
+		if (multiline) maxLoops++; // Do an extra iteration to ensure a LayoutGroup is created for the last (empty) line.
+		
+		while (textIndex < maxLoops) {
+			
+			if ((breakIndex > -1) && (spaceIndex == -1 || breakIndex < spaceIndex) && (formatRange.end >= breakIndex)) {
+				
+				layoutGroup = new TextLayoutGroup (formatRange.format, textIndex, breakIndex);
+				layoutGroup.advances = getAdvances (text, textIndex, breakIndex);
+				layoutGroup.offsetX = offsetX;
+				layoutGroup.ascent = ascent;
+				layoutGroup.descent = descent;
+				layoutGroup.leading = leading;
+				layoutGroup.lineIndex = lineIndex;
+				layoutGroup.offsetY = offsetY;
+				layoutGroup.width = getAdvancesWidth (layoutGroup.advances);
+				layoutGroup.height = heightValue;
+				layoutGroups.push (layoutGroup);
+				
+				offsetY += heightValue;
+				offsetX = 2;
+				
+				if (formatRange.end == breakIndex) {
+					
+					nextFormatRange ();
+					lineFormat = formatRange.format;
+					
+				}
+				
+				textIndex = breakIndex + 1;
+				previousBreakIndex = breakIndex;
+				breakIndex = getLineBreakIndex (textIndex);
+				lineIndex++;
+				layoutGroup = null;
+				
+			} else if (formatRange.end >= spaceIndex && spaceIndex > -1 && textIndex < formatRange.end) {
+				
+				if (layoutGroup != null && previousSpaceIndex != previousBreakIndex && previousSpaceIndex == textIndex-1 && textIndex == formatRange.start && spaceIndex <= formatRange.end) {
+					// This ensures we render contiguous selection rectangles
+					// TODO: Fix the case where a block of whitespace needs its own TextLayoutGroup
+					layoutGroup.endIndex = textIndex;
+					layoutGroup.width += layoutGroup.advances[layoutGroup.advances.length - 1];
+				}
+				
+				layoutGroup = null;
+				wrap = false;
+				
+				while (true) {
+					
+					if (textIndex == formatRange.end) break;
+					if (spaceIndex == -1) spaceIndex = formatRange.end;
+					
+					advances = getAdvances (text, textIndex, spaceIndex + 1);
+					var spaceWidth = advances[advances.length - 1];
+					widthValue = getAdvancesWidth (advances) - spaceWidth;
+					
+					if (wordWrap) {
+						
+						if (offsetX + widthValue > width - 2) {
+							
+							wrap = true;
+							
+						}
+						
+					}
+					
+					if (wrap) {
+						
+						offsetY += heightValue;
+						
+						var i = layoutGroups.length - 1;
+						var offsetCount = 0;
+						
+						while (true) {
+							
+							layoutGroup = layoutGroups[i];
+							
+							if (i > 0 && layoutGroup.startIndex > previousSpaceIndex) {
+								
+								offsetCount++;
+								
+							} else {
+								
+								break;
+								
+							}
+							
+							i--;
+							
+						}
+						
+						lineIndex++;
+						
+						offsetX = 2;
+						
+						if (offsetCount > 0) {
+							
+							var bumpX = layoutGroups[layoutGroups.length - offsetCount].offsetX;
+							
+							for (i in (layoutGroups.length - offsetCount)...layoutGroups.length) {
+								
+								layoutGroup = layoutGroups[i];
+								layoutGroup.offsetX -= bumpX;
+								layoutGroup.offsetY = offsetY;
+								layoutGroup.lineIndex = lineIndex;
+								offsetX += layoutGroup.width;
+								
+							}
+							
+						}
+						
+						layoutGroup = new TextLayoutGroup (formatRange.format, textIndex, spaceIndex);
+						layoutGroup.advances = advances;
+						layoutGroup.offsetX = offsetX;
+						layoutGroup.ascent = ascent;
+						layoutGroup.descent = descent;
+						layoutGroup.leading = leading;
+						layoutGroup.lineIndex = lineIndex;
+						layoutGroup.offsetY = offsetY;
+						layoutGroup.width = widthValue;
+						layoutGroup.height = heightValue;
+						layoutGroups.push (layoutGroup);
+						
+						offsetX = widthValue + spaceWidth;
+						marginRight = spaceWidth;
+						
+						wrap = false;
+						
+					} else {
+						
+						if (formatRange.start == previousSpaceIndex && textIndex - 1 == previousSpaceIndex) {
+							
+							// Grow this TextLayoutGroup to the left 1 space for contiguous selection rectangles
+							advances = getAdvances (text, previousSpaceIndex, textIndex).concat(advances);
+							widthValue += advances[0];
+							offsetX -= advances[0];
+							
+							textIndex = previousSpaceIndex;
+							
+						}
+						
+						if (layoutGroup != null && textIndex == spaceIndex) {
+							
+							if (formatRange.format.align != JUSTIFY) {
+								
+								layoutGroup.endIndex = spaceIndex;
+								
+							}
+							
+							marginRight += spaceWidth;
+							
+						} else if (layoutGroup == null || lineFormat.align == JUSTIFY) {
+							
+							layoutGroup = new TextLayoutGroup (formatRange.format, textIndex, spaceIndex);
+							layoutGroup.advances = advances;
+							layoutGroup.offsetX = offsetX;
+							layoutGroup.ascent = ascent;
+							layoutGroup.descent = descent;
+							layoutGroup.leading = leading;
+							layoutGroup.lineIndex = lineIndex;
+							layoutGroup.offsetY = offsetY;
+							layoutGroup.width = widthValue;
+							layoutGroup.height = heightValue;
+							layoutGroups.push (layoutGroup);
+							
+							marginRight = spaceWidth;
+							
+						} else {
+							
+							layoutGroup.endIndex = spaceIndex;
+							layoutGroup.advances = layoutGroup.advances.concat (advances);
+							layoutGroup.width += marginRight + widthValue;
+							
+							marginRight = spaceWidth;
+							
+						}
+						
+						offsetX += widthValue + spaceWidth;
+						
+					}
+					
+					textIndex = spaceIndex + 1;
+					
+					previousSpaceIndex = spaceIndex;
+					var nextSpaceIndex = text.indexOf (" ", previousSpaceIndex + 1);
+					
+					// Check if we can continue wrapping this line until the next line-break or end-of-String.
+					// When `previousSpaceIndex == breakIndex`, the loop has finished growing layoutGroup.endIndex until the end of this line.
+					if (previousSpaceIndex != breakIndex && breakIndex > -1 && (nextSpaceIndex == -1 || nextSpaceIndex > breakIndex)) {
+						
+						spaceIndex = breakIndex;
+						
+					}
+					else {
+						
+						if (breakIndex == previousSpaceIndex) {
+							
+							textIndex = breakIndex;
+							
+						}
+						
+						spaceIndex = nextSpaceIndex;
+						
+					}
+					
+					if (formatRange.end <= previousSpaceIndex) {
+						
+						layoutGroup = null;
+						nextFormatRange ();
+						
+					}
+					
+					if ((spaceIndex > breakIndex && breakIndex > -1) || textIndex > text.length || spaceIndex > formatRange.end || (spaceIndex == -1 && breakIndex > -1)) {
+						
+						break;
+						
+					}
+					
+				}
+				
+			} else {
+				
+				if (textIndex > formatRange.end) {
+					
+					break;
+					
+				} else if (textIndex < formatRange.end || textIndex == text.length) {
+					
+					if (layoutGroup == null) {
+						
+						layoutGroup = new TextLayoutGroup (formatRange.format, textIndex, formatRange.end);
+						layoutGroup.advances = getAdvances (text, textIndex, formatRange.end);
+						layoutGroup.offsetX = offsetX;
+						layoutGroup.ascent = ascent;
+						layoutGroup.descent = descent;
+						layoutGroup.leading = leading;
+						layoutGroup.lineIndex = lineIndex;
+						layoutGroup.offsetY = offsetY;
+						layoutGroup.width = getAdvancesWidth (layoutGroup.advances);
+						layoutGroup.height = heightValue;
+						layoutGroups.push (layoutGroup);
+						
+						offsetX += layoutGroup.width;
+						
+					} else if (layoutGroup.startIndex != layoutGroup.endIndex) {
+						
+						advances = getAdvances (text, textIndex, formatRange.end);
+						widthValue = getAdvancesWidth (advances);
+						layoutGroup.advances = layoutGroup.advances.concat (advances);
+						layoutGroup.width += marginRight + widthValue;
+						layoutGroup.endIndex = formatRange.end;
+						
+						offsetX += widthValue;
+						
+					}
+					
+					textIndex = formatRange.end;
+					
+				}
+				
+				nextFormatRange ();
+				
+				if (textIndex == formatRange.end) {
+					
+					textIndex++;
+					break;
+					
+				}
+				
+			}
+			
+		}
+		
+	}
+	
 	
 	private function setTextAlignment ():Void {
 		
@@ -900,9 +1136,9 @@ class TextEngine {
 					
 					case CENTER:
 						
-						if (lineWidths[lineIndex] < (width - 2 * HORIZONTAL_MARGIN)) {
+						if (lineWidths[lineIndex] < width - 4) {
 							
-							offsetX = Math.round ((width - 2 * HORIZONTAL_MARGIN - lineWidths[lineIndex]) / 2);
+							offsetX = Math.round ((width - 4 - lineWidths[lineIndex]) / 2);
 							
 						} else {
 							
@@ -912,9 +1148,9 @@ class TextEngine {
 					
 					case RIGHT:
 						
-						if (lineWidths[lineIndex] < width - 2 * HORIZONTAL_MARGIN) {
+						if (lineWidths[lineIndex] < width - 4) {
 							
-							offsetX = Math.round (width - 2 * HORIZONTAL_MARGIN - lineWidths[lineIndex]);
+							offsetX = Math.round (width - 4 - lineWidths[lineIndex]);
 							
 						} else {
 							
@@ -924,7 +1160,7 @@ class TextEngine {
 					
 					case JUSTIFY:
 						
-						if (lineWidths[lineIndex] < width - 2 * HORIZONTAL_MARGIN) {
+						if (lineWidths[lineIndex] < width - 4) {
 							
 							lineLength = 1;
 							
@@ -949,7 +1185,7 @@ class TextEngine {
 								var endChar = text.charAt (group.endIndex);
 								if (group.endIndex < text.length && endChar != "\n" && endChar != "\r") {
 									
-									offsetX = (width - 2 * HORIZONTAL_MARGIN - lineWidths[lineIndex]) / (lineLength - 1);
+									offsetX = (width - 4 - lineWidths[lineIndex]) / (lineLength - 1);
 									
 									for (j in 1...lineLength) {
 										
@@ -986,15 +1222,15 @@ class TextEngine {
 	
 	private function update ():Void {
 		
-		if (text == null || text == "" || textFormatRanges.length == 0) {
+		if (text == null || (!multiline && StringTools.trim (text) == "") || textFormatRanges.length == 0) {
 			
-			lineAscents.splice (0, lineAscents.length);
-			lineBreaks.splice (0, lineBreaks.length);
-			lineDescents.splice (0, lineDescents.length);
-			lineLeadings.splice (0, lineLeadings.length);
-			lineHeights.splice (0, lineHeights.length);
-			lineWidths.splice (0, lineWidths.length);
-			layoutGroups.splice (0, layoutGroups.length);
+			lineAscents.length = 0;
+			lineBreaks.length = 0;
+			lineDescents.length = 0;
+			lineLeadings.length = 0;
+			lineHeights.length = 0;
+			lineWidths.length = 0;
+			layoutGroups.length = 0;
 			
 			textWidth = 0;
 			textHeight = 0;
