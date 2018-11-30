@@ -6,10 +6,10 @@ class SoftKeyboardEvent extends Event
     public static var SOFT_KEYBOARD_ACTIVATING : String = "softKeyboardActivating";
     public static var SOFT_KEYBOARD_DEACTIVATE : String = "softKeyboardDeactivate";
 
-    public var relatedObject : flash.display.InteractiveObject;
+    public var relatedObject : openfl.display.InteractiveObject;
     public var triggerType(default,null) : String;
 
-    public function new(type : String, bubbles : Bool, cancelable : Bool, relatedObjectVal : flash.display.InteractiveObject, triggerTypeVal : String) : Void 
+    public function new(type : String, bubbles : Bool, cancelable : Bool, relatedObjectVal : openfl.display.InteractiveObject, triggerTypeVal : String) : Void 
     {
        super(type, bubbles, cancelable);
 
