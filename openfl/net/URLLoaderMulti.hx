@@ -125,7 +125,7 @@ class URLLoaderMulti extends EventDispatcher
                 bytes = openfl.Assets.getBytes(path);
             }
             else {
-                bytes = Bytes.readFile (path);
+                bytes = ByteArray.fromFile (path);
             }
 
             if (bytes == null) {

@@ -150,6 +150,12 @@ class EventDispatcher implements IEventDispatcher {
 
 	}
 
+	private function __removeAllListeners ():Void {
+
+         __eventMap = null;
+         __iterators = null;
+
+ 	}
 
 	public function toString ():String {
 
