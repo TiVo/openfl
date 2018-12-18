@@ -67,6 +67,12 @@ class GLBlendModeManager extends AbstractBlendModeManager {
 				gl.enable (gl.BLEND);
 				gl.blendEquation (gl.FUNC_REVERSE_SUBTRACT);
 				gl.blendFunc (gl.ONE, gl.ONE);
+
+			case INVERT:
+
+				gl.enable (gl.BLEND);
+				gl.blendEquation (gl.FUNC_REVERSE_SUBTRACT);
+				gl.blendFunc(gl.DST_COLOR, gl.ONE_MINUS_SRC_COLOR);
 			
 			#if desktop
 			case DARKEN:

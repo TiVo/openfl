@@ -203,9 +203,14 @@ class GLRenderer extends AbstractRenderer {
 		
 		renderSession.allowSmoothing = (stage.quality != LOW);
 		renderSession.upscaled = (displayMatrix.a != 1 || displayMatrix.d != 1);
-		
+
 		stage.__renderGL (renderSession);
-		
+
+        if (this.transparent) {
+            gl.clearColor (0, 0, 0, 0);
+            gl.clear (gl.COLOR_BUFFER_BIT);
+        }
+
 		if (offsetX > 0 || offsetY > 0) {
 			
 			gl.clearColor (0, 0, 0, 1);
